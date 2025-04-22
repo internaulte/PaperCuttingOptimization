@@ -32,6 +32,6 @@ void main() {
       allowRotation: false,
     );
     final solution = await impl.execute(params);
-    expect(solution.pageCount, greaterThan(1));
+    expect(solution.pageCount, 10);
   });
 }
