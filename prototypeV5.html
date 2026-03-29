@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Optimiseur découpe — Prototype (metrics en cm²)</title>
+<style>
+:root{ --bg:#f5f7fa; --card:#fff; --primary:#0A66C2; --muted:#6b7280; --danger:#e02424; --success:#059669;}
+html,body{height:100%; margin:0; font-family:Inter, system-ui, Arial, sans-serif; background:var(--bg); color:#111;}
+header{height:56px; background:var(--primary); color:white; display:flex; align-items:center; justify-content:space-between; padding:0 16px; box-shadow:0 1px 0 rgba(0,0,0,0.08);}
+.container{display:flex; height:calc(100vh - 56px); gap:0;}
+.sidebar{width:420px; min-width:260px; background:var(--card); padding:16px; box-shadow:1px 0 0 rgba(0,0,0,0.06); overflow:auto;}
+.main{flex:1; display:flex; flex-direction:column; gap:8px; padding:12px; overflow:auto;}
+.section-title{font-size:13px; color:var(--muted); margin:8px 0 6px;}
+.btn{background:var(--primary); color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;}
+.btn.ghost{background:transparent; color:var(--primary); border:1px solid rgba(10,102,194,0.12)}
+.result-card{background:#fff;border-radius:10px;padding:10px;border:1px solid #e6eef8; box-shadow:0 6px 20px rgba(2,6,23,0.03); margin-bottom:12px;}
+.svg-wrap{display:flex;align-items:flex-start;justify-content:flex-start;padding:8px;background:#f8fbff;border-radius:6px; gap:12px;}
+.meta-info{font-size:12px;color:var(--muted); margin-left:8px;}
+.piece-row{display:flex; gap:8px; align-items:flex-start; margin-bottom:8px; padding:8px; background:#fbfdff; border-radius:8px; border:1px solid #eef2f7; flex-wrap:wrap;}
+.field-labels, .field-inputs { display:flex; gap:8px; align-items:center; width:100%; }
+.field-cell { width:110px; display:flex; flex-direction:column; align-items:flex-start; }
+.field-cell.smallw { width:86px; }
+.field-cell .lab { font-size:12px; color:var(--muted); margin-bottom:4px; white-space:nowrap; }
+.field-cell input[type="number"]{ width:110px; box-sizing:border-box; padding:6px; border-radius:4px; border:1px solid #dbeafe; }
+.piece-actions{display:flex; justify-content:space-between; align-items:center; width:100%; margin-top:8px; flex-wrap:wrap;}
+.remove-icon{ display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:6px; background:transparent; border:1px solid rgba(224,36,36,0.12); color:var(--danger); cursor:pointer; }
+.remove-icon svg{width:16px; height:16px; fill:var(--danger);}
+.dup-icon{ display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:6px; background:transparent; border:1px solid rgba(5,150,105,0.12); color:var(--success); cursor:pointer; }
+.dup-icon svg{width:16px; height:16px; fill:var(--success);}
+input[disabled]{ background:#f3f4f6; color:var(--muted); cursor:not-allowed; }
+.invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 2px rgba(224,36,36,0.06); }
+.help-block{font-size:12px;color:var(--muted); margin-top:8px;}
+.modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.35); z-index:40}
+.modal.active{display:flex}
+.modal .card{background:white;padding:16px;border-radius:8px; width:90%; max-width:520px}
+.error-list{color:var(--danger); margin:8px 0;}
+
+/* pages and thumbnails */
+.pages-row{display:flex; align-items:flex-start; gap:12px; width:100%;}
+.main-view{flex:0 0 65%; min-width:420px; max-width:75%;}
+.thumbs-column{display:flex; flex-direction:row; gap:8px; align-items:center; overflow-x:auto; padding:6px; flex:1;}
+.thumb{flex:0 0 180px; width:180px; height:160px; background:white; border-radius:6px; border:1px solid #e6eef8; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 8px rgba(2,6,23,0.03);}
+.thumb.selected{outline:3px solid rgba(10,102,194,0.12);}
+.thumb svg{width:100%; height:100%;}
+@media (max-width:1000px){ .main-view{flex-basis:60%; min-width:320px;} .thumb{flex-basis:120px;width:120px;height:100px;} }
+/* responsive: if viewport is narrow, stack vertically */
+@media (max-width:700px){ .pages-row{flex-direction:column;} .main-view{width:100%;} .thumb{width:100%; height:120px;} }
+
+/* header metrics inline */
+.header-right{display:flex; gap:12px; align-items:center; font-size:13px; color:var(--muted);}
+.header-metric{display:flex; flex-direction:column; align-items:flex-end; min-width:80px;}
+.header-metric .m-label{font-size:11px; color:var(--muted);}
+.header-metric .m-value{font-weight:600;}
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;gap:12px;align-items:center;">
+    <div style="font-weight:600">Optimiseur découpe — Prototype</div>
+    <div class="meta-info">Offline</div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <button class="btn ghost" id="loadBtn">Charger</button>
+    <button class="btn ghost" id="saveBtn">Sauvegarder</button>
+  </div>
+</header>
+
+<div class="container">
+  <aside class="sidebar" aria-label="Panneau de configuration">
+    <div class="section-title">Format papier</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="paperSelect">
+        <option value="A4">A4 — 210 × 297 mm</option>
+        <option value="SQR">305 × 305 mm</option>
+        <option value="CUSTOM">Personnalisé</option>
+      </select>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <label class="meta-info">Orientation</label>
+        <select id="orientation"><option value="portrait">Portrait</option><option value="landscape">Paysage</option></select>
+      </div>
+    </div>
+
+    <div id="customPaperInputs" style="display:none; margin-top:8px">
+      <label class="meta-info">Largeur (mm)</label>
+      <input id="customW" type="number" value="210">
+      <label class="meta-info">Hauteur (mm)</label>
+      <input id="customH" type="number" value="297">
+    </div>
+
+    <div style="margin-top:12px">
+      <div class="section-title">Paramètres globaux</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label class="meta-info">Kerf (mm)</label>
+        <input id="kerf" type="number" value="0" step="0.1" style="width:80px">
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <div class="section-title">Formes</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button class="btn" id="addFormBtn">+ Ajouter Forme</button>
+        <button class="btn ghost" id="clearFormsBtn">Effacer tout</button>
+      </div>
+      <div id="piecesContainer" aria-live="polite"></div>
+      <div class="help-block">Entrez Longueur / Largeur / Nombre. Cochez "Carré" pour verrouiller la largeur sur la longueur. Les sauvegardes sont locales (aucun cloud).</div>
+    </div>
+  </aside>
+
+  <main class="main" role="main">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;gap:8px">
+        <button class="btn" id="calcBtn">Calculer l'optimisation</button>
+        <button class="btn ghost" id="clearLayoutBtn">Réinitialiser</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn ghost" id="globalZoomFit">Fit tous</button>
+      </div>
+    </div>
+
+    <div id="resultsArea" style="margin-top:12px">
+      <div class="help-block">Aucun calcul pour le moment. Cliquez sur « Calculer l\u2019optimisation ».</div>
+    </div>
+  </main>
+</div>
+
+<!-- Confirm delete single form -->
+<div id="confirmModal" class="modal" role="dialog" aria-modal="true">
+  <div class="card">
+    <h3>Supprimer cette forme ?</h3>
+    <p>Voulez-vous supprimer définitivement cette forme ?</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+      <button id="confirmCancel" class="btn ghost">Annuler</button>
+      <button id="confirmYes" class="btn" style="background:var(--danger);border-color:var(--danger)">Oui, supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm clear all -->
+<div id="confirmClearAllModal" class="modal" role="dialog" aria-modal="true">
+  <div class="card">
+    <h3>Effacer toutes les formes ?</h3>
+    <p>Cette action supprimera toutes les formes. Êtes-vous sûr(e) ?</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+      <button id="confirmClearCancel" class="btn ghost">Annuler</button>
+      <button id="confirmClearYes" class="btn" style="background:var(--danger);border-color:var(--danger)">Oui, effacer tout</button>
+    </div>
+  </div>
+</div>
+
+<!-- Validation modal -->
+<div id="validationModal" class="modal" role="dialog" aria-modal="true">
+  <div class="card">
+    <h3>Erreurs de saisie</h3>
+    <div id="validationMessage" class="error-list"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+      <button id="validationOk" class="btn">OK, corriger</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Prototype léger — modifications :
+   - metrics déplacés dans l'en-tête de chaque solution
+   - conversion mm² → cm² pour affichage (1 cm² = 100 mm²)
+   - formatage à 1 décimale et .toLocaleString() pour lisibilité
+*/
+
+// ---------- helpers ----------
+const qs = s => document.querySelector(s);
+function download(filename, content, mime='image/svg+xml'){ const blob = new Blob([content], {type: mime}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),5000); }
+function escapeHtml(str){ return String(str).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[m]); }
+
+// format mm^2 -> cm^2, 1 decimal, localized
+function fmtCm2(mm2){
+  const cm2 = (Number(mm2) || 0) / 100.0;
+  return cm2.toLocaleString(undefined, {maximumFractionDigits:1});
+}
+
+// ---------- state ----------
+let state = {
+  paper: {w:210,h:297, name:'A4'},
+  orientation: 'portrait',
+  kerf: 0,
+  pieces: [],
+  results: {},
+  currentSheetIndex: {},
+  zoomByAlgo: {}
+};
+
+// ---------- refs ----------
+const piecesContainer = qs('#piecesContainer');
+const paperSelect = qs('#paperSelect'), customPaperInputs = qs('#customPaperInputs'), customW = qs('#customW'), customH = qs('#customH');
+const orientationSelect = qs('#orientation'), kerfInput = qs('#kerf');
+const addFormBtn = qs('#addFormBtn'), clearFormsBtn = qs('#clearFormsBtn');
+const calcBtn = qs('#calcBtn'), clearLayoutBtn = qs('#clearLayoutBtn');
+const resultsArea = qs('#resultsArea');
+const confirmModal = qs('#confirmModal'), confirmCancel = qs('#confirmCancel'), confirmYes = qs('#confirmYes');
+let pendingRemoveElement = null;
+const confirmClearAllModal = qs('#confirmClearAllModal'), confirmClearCancel = qs('#confirmClearCancel'), confirmClearYes = qs('#confirmClearYes');
+const validationModal = qs('#validationModal'), validationMessage = qs('#validationMessage'), validationOk = qs('#validationOk');
+const saveBtn = qs('#saveBtn'), loadBtn = qs('#loadBtn');
+const globalZoomFit = qs('#globalZoomFit');
+
+// ---------- UI: add/edit forms (same as before) ----------
+function createFormRow(p = null){
+  const id = p && p.id ? p.id : ('f' + Math.random().toString(36).slice(2,8));
+  const wrapper = document.createElement('div'); wrapper.className='piece-row'; wrapper.dataset.id = id;
+
+  const name = p && p.name ? p.name : '';
+  const wVal = (p && typeof p.w !== 'undefined' && p.w !== null && p.w !== 0) ? String(p.w) : '';
+  const hVal = (p && typeof p.h !== 'undefined' && p.h !== null && p.h !== 0) ? String(p.h) : '';
+  const qtyVal = p && p.qty ? p.qty : 1;
+  const isSquare = p && p.isSquare ? true : false;
+  const allowRotation = p && typeof p.allowRotation !== 'undefined' ? p.allowRotation : true;
+
+  wrapper.innerHTML = ''
+    + '<div class="piece-main">'
+    +   '<div style="min-width:140px;display:flex;gap:8px;align-items:center">'
+    +     '<input class="name" placeholder="Nom" value="' + escapeHtml(name) + '" style="width:140px;padding:6px;border:1px solid #e6eefc;border-radius:6px" />'
+    +     '<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="is-square" ' + (isSquare ? 'checked' : '') + ' /> <span>Carré</span></label>'
+    +   '</div>'
+    +   '<div class="piece-controls" style="flex:1">'
+    +     '<div class="field-labels">'
+    +       '<div class="field-cell"><div class="lab">Longueur (mm)</div></div>'
+    +       '<div class="field-cell"><div class="lab">Largeur (mm)</div></div>'
+    +       '<div class="field-cell smallw"><div class="lab">Nombre</div></div>'
+    +     '</div>'
+    +     '<div class="field-inputs">'
+    +       '<div class="field-cell"><input class="w" type="number" step="0.1" value="' + escapeHtml(wVal) + '" /></div>'
+    +       '<div class="field-cell"><input class="h" type="number" step="0.1" value="' + escapeHtml(hVal) + '" /></div>'
+    +       '<div class="field-cell smallw"><input class="qty" type="number" min="1" value="' + Number(qtyVal) + '" style="width:86px" /></div>'
+    +     '</div>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="piece-actions">'
+    +   '<div style="display:flex;align-items:center">'
+    +     '<label style="display:flex;gap:6px;align-items:center"><input class="rotate" type="checkbox" ' + (allowRotation ? 'checked' : '') + ' /> <span class="rot-text">Autoriser rotation 90°</span></label>'
+    +   '</div>'
+    +   '<div style="display:flex;gap:8px;align-items:center">'
+    +     '<button class="dup-icon" title="Dupliquer"><svg viewBox="0 0 24 24"><path d="M8 7h9v11H8zM5 4h9v2H5z"/></svg></button>'
+    +     '<button class="remove-icon" title="Supprimer"><svg viewBox="0 0 24 24"><path d="M3 6h18v2H3V6zm2 3h14l-1.2 11.2c-.1.9-.9 1.8-1.9 1.8H8.1c-1 0-1.8-.9-1.9-1.8L5 9zM9 4V3c0-.6.4-1 1-1h4c.6 0 1 .4 1 1v1h5v2H4V4h5z"/></svg></button>'
+    +   '</div>'
+    + '</div>';
+
+  piecesContainer.appendChild(wrapper);
+
+  const nameInput = wrapper.querySelector('.name');
+  const isSquareCheckbox = wrapper.querySelector('.is-square');
+  const wInput = wrapper.querySelector('.w');
+  const hInput = wrapper.querySelector('.h');
+  const qtyInput = wrapper.querySelector('.qty');
+  const rotateCheckbox = wrapper.querySelector('.rotate');
+  const removeBtn = wrapper.querySelector('.remove-icon');
+  const dupBtn = wrapper.querySelector('.dup-icon');
+
+  function applySquareMode(checked){
+    if(checked){
+      hInput.value = wInput.value;
+      hInput.disabled = true;
+      rotateCheckbox.checked = false;
+      rotateCheckbox.disabled = true;
+    } else {
+      hInput.disabled = false;
+      rotateCheckbox.disabled = false;
+    }
+    savePiecesToState();
+  }
+
+  isSquareCheckbox.addEventListener('change', (e)=> applySquareMode(e.target.checked));
+  wInput.addEventListener('input', ()=>{ if(isSquareCheckbox.checked) hInput.value = wInput.value; savePiecesToState(); });
+  hInput.addEventListener('input', savePiecesToState);
+  qtyInput.addEventListener('change', savePiecesToState);
+  nameInput.addEventListener('change', savePiecesToState);
+  rotateCheckbox.addEventListener('change', savePiecesToState);
+
+  dupBtn.addEventListener('click', ()=>{
+    const clone = {
+      id: 'f' + Math.random().toString(36).slice(2,8),
+      name: nameInput.value,
+      w: wInput.value === '' ? null : Number(wInput.value),
+      h: hInput.value === '' ? null : Number(hInput.value),
+      qty: Number(qtyInput.value) || 1,
+      isSquare: isSquareCheckbox.checked,
+      allowRotation: rotateCheckbox.checked
+    };
+    createFormRow(clone);
+    savePiecesToState();
+  });
+
+  removeBtn.addEventListener('click', ()=>{ pendingRemoveElement = wrapper; confirmModal.classList.add('active'); confirmCancel.focus(); });
+
+  applySquareMode(isSquare);
+}
+
+// ---------- persistence ----------
+function savePiecesToState(){
+  const nodes = Array.from(piecesContainer.children);
+  state.pieces = nodes.map(n=>{
+    const id = n.dataset.id;
+    const name = n.querySelector('.name').value || '';
+    const isSquare = !!n.querySelector('.is-square').checked;
+    const wEl = n.querySelector('.w'), hEl = n.querySelector('.h'), qtyEl = n.querySelector('.qty'), rotateEl = n.querySelector('.rotate');
+    const w = (wEl && wEl.value !== '') ? parseFloat(wEl.value)||0 : 0;
+    const h = (hEl && hEl.value !== '') ? parseFloat(hEl.value)||0 : 0;
+    const qty = Math.max(1, parseInt(qtyEl.value) || 1);
+    return { id, name, isSquare, w, h, qty, allowRotation: isSquare ? false : !!(rotateEl && rotateEl.checked) };
+  });
+  try{ localStorage.setItem('cutplanner_temp', JSON.stringify(state)); }catch(e){}
+}
+function loadPiecesFromState(){
+  piecesContainer.innerHTML = '';
+  if(state.pieces && state.pieces.length > 0) state.pieces.forEach(p => createFormRow(p));
+}
+
+// ---------- paper UI ----------
+paperSelect.addEventListener('change', ()=>{
+  const v = paperSelect.value;
+  if(v === 'A4'){ state.paper = {w:210,h:297,name:'A4'}; customPaperInputs.style.display='none'; }
+  else if(v === 'SQR'){ state.paper = {w:305,h:305,name:'305x305'}; customPaperInputs.style.display='none'; }
+  else { customPaperInputs.style.display='block'; state.paper = {w: parseFloat(customW.value)||210, h: parseFloat(customH.value)||297, name:'custom'}; }
+});
+customW.addEventListener('change', ()=>{ state.paper.w = parseFloat(customW.value)||210; });
+customH.addEventListener('change', ()=>{ state.paper.h = parseFloat(customH.value)||297; });
+orientationSelect.addEventListener('change', ()=>{ state.orientation = orientationSelect.value; });
+kerfInput.addEventListener('change', ()=>{ state.kerf = parseFloat(kerfInput.value) || 0; });
+
+// ---------- packers (same as before) ----------
+function shelfPack(items, paperW, paperH, kerf){
+  const bins=[];
+  function newBin(){ return { width:paperW, height:paperH, rects:[], rows:[], usedArea:0 }; }
+  bins.push(newBin());
+  items.forEach(it=>{
+    const attemptSizes=[]; const k=Math.max(0,kerf||0); const wEff=it.w+k, hEff=it.h+k;
+    attemptSizes.push({w:wEff,h:hEff,rot:false}); if(it.allowRotation) attemptSizes.push({w:hEff,h:wEff,rot:true});
+    let placed=false;
+    for(const bin of bins){
+      for(const s of attemptSizes){
+        for(const row of bin.rows){
+          if(row.x + s.w <= bin.width && s.h <= row.height){
+            const x=row.x, y=row.y; row.x += s.w;
+            bin.rects.push({x,y,width:s.w,height:s.h, meta:{originalW:it.origW, originalH:it.origH, rotated:s.rot, name:it.name}});
+            bin.usedArea += (it.origW * it.origH); placed=true; break;
+          }
+        }
+        if(placed) break;
+        const currentY = bin.rows.reduce((acc,r)=>Math.max(acc,r.y+r.height),0);
+        if(currentY + s.h <= bin.height){
+          const row = {x:s.w, y:currentY, height:s.h}; bin.rows.push(row);
+          bin.rects.push({x:0,y:row.y,width:s.w,height:s.h, meta:{originalW:it.origW, originalH:it.origH, rotated:s.rot, name:it.name}});
+          bin.usedArea += (it.origW * it.origH); placed=true; break;
+        }
+      }
+      if(placed) break;
+    }
+    if(!placed){
+      const nb = newBin(); const s = attemptSizes[0]; let chosen = s;
+      if(s.w > nb.width || s.h > nb.height){ const alt = attemptSizes.find(a=>a.w<=nb.width && a.h<=nb.height); if(alt) chosen = alt; else chosen = {w:Math.min(s.w,nb.width), h:Math.min(s.h,nb.height), rot:s.rot}; }
+      nb.rows.push({x:chosen.w, y:0, height:chosen.h}); nb.rects.push({x:0,y:0,width:chosen.w,height:chosen.h, meta:{originalW:it.origW, originalH:it.origH, rotated:chosen.rot, name:it.name}}); nb.usedArea += (it.origW * it.origH);
+      bins.push(nb);
+    }
+  });
+  return bins;
+}
+
+function MaxRectsPacker(binW,binH){
+  return { binW,binH, freeRects:[{x:0,y:0,w:binW,h:binH}], usedRects:[],
+    placeRect(w,h,allowRotate){
+      let best=null; const trySizes=[{w,h,rot:false}]; if(allowRotate) trySizes.push({w:h,h:w,rot:true});
+      for(const candidate of trySizes){
+        for(const free of this.freeRects){
+          if(candidate.w <= free.w && candidate.h <= free.h){
+            const leftoverW = free.w - candidate.w; const leftoverH = free.h - candidate.h;
+            const shortSide = Math.min(leftoverW,leftoverH); const longSide = Math.max(leftoverW,leftoverH);
+            const score = shortSide*10000 + longSide;
+            if(!best || score < best.score) best = {score, free, x:free.x, y:free.y, w:candidate.w, h:candidate.h, rot:candidate.rot};
+          }
+        }
+      }
+      if(!best) return null;
+      this.splitFreeRect(best.free, best.x, best.y, best.w, best.h); this.usedRects.push({x:best.x,y:best.y,width:best.w,height:best.h, meta:{rotated:best.rot}});
+      return {x:best.x,y:best.y,width:best.w,height:best.h, rot:best.rot};
+    },
+    splitFreeRect(free,x,y,w,h){
+      const idx = this.freeRects.indexOf(free); if(idx>=0) this.freeRects.splice(idx,1);
+      const rightW = free.w - w; const rightH = h; if(rightW>0) this.freeRects.push({x:free.x+w,y:free.y,w:rightW,h:rightH});
+      const bottomW = free.w; const bottomH = free.h - h; if(bottomH>0) this.freeRects.push({x:free.x,y:free.y+h,w:bottomW,h:bottomH});
+      this.mergeFreeList();
+    },
+    mergeFreeList(){
+      for(let i=0;i<this.freeRects.length;i++){
+        for(let j=i+1;j<this.freeRects.length;j++){
+          const a=this.freeRects[i], b=this.freeRects[j];
+          if(a.y===b.y && a.h===b.h && a.x + a.w === b.x){ a.w += b.w; this.freeRects.splice(j,1); j--; }
+          else if(a.x===b.x && a.w===b.w && a.y + a.h === b.y){ a.h += b.h; this.freeRects.splice(j,1); j--; }
+        }
+      }
+    }
+  };
+}
+
+function maxRectsPack(items,paperW,paperH,kerf){
+  const bins=[]; let itemsCopy = items.slice();
+  while(itemsCopy.length){
+    const packer = MaxRectsPacker(paperW,paperH);
+    const bin = {width:paperW,height:paperH,rects:[],usedArea:0};
+    itemsCopy.sort((a,b)=> (b.w*b.h) - (a.w*a.h));
+    const remaining = [];
+    for(const it of itemsCopy){
+      const wEff = it.w + Math.max(0,kerf||0); const hEff = it.h + Math.max(0,kerf||0);
+      const placed = packer.placeRect(wEff,hEff,it.allowRotation);
+      if(placed){ bin.rects.push({x:placed.x,y:placed.y,width:placed.width,height:placed.height, meta:{originalW:it.origW, originalH:it.origH, rotated:placed.rot, name:it.name}}); bin.usedArea += (it.origW * it.origH); }
+      else remaining.push(it);
+    }
+    bins.push(bin);
+    if(remaining.length === itemsCopy.length){
+      const it = itemsCopy.shift();
+      const nb = {width:paperW,height:paperH,rects:[],usedArea:0};
+      nb.rects.push({x:0,y:0,width:Math.min(it.w+kerf,paperW),height:Math.min(it.h+kerf,paperH), meta:{originalW:it.origW, originalH:it.origH, rotated:false, name:it.name}});
+      nb.usedArea += it.origW * it.origH;
+      bins.push(nb);
+      break;
+    }
+    itemsCopy = remaining;
+  }
+  return bins;
+}
+
+// ---------- build items from forms ----------
+function buildItemsFromState(){
+  const arr = [];
+  state.pieces.forEach(p=>{
+    for(let i=0;i<p.qty;i++){
+      if(p.isSquare){ const s = Number(p.w) || 0; arr.push({id:p.id,name:p.name||'Carré',shape:'square',w:s,h:s,origW:s,origH:s,allowRotation:false}); }
+      else { const w = Number(p.w) || 0, h = Number(p.h) || 0; arr.push({id:p.id,name:p.name||'Rect',shape:'rect',w,h,origW:w,origH:h,allowRotation:!!p.allowRotation}); }
+    }
+  });
+  return arr;
+}
+
+// ---------- validation ----------
+function validateForms(){
+  const nodes = Array.from(piecesContainer.children);
+  const errors = [];
+  nodes.forEach((n, idx)=>{
+    const isSquare = !!n.querySelector('.is-square').checked;
+    const wEl = n.querySelector('.w'), hEl = n.querySelector('.h');
+    const wVal = wEl ? String(wEl.value).trim() : '';
+    const hVal = hEl ? String(hEl.value).trim() : '';
+    if(wEl) wEl.classList.remove('invalid'); if(hEl) hEl.classList.remove('invalid');
+    if(isSquare){
+      if(wVal === '' || Number(wVal) <= 0){ errors.push({idx, msg: 'La forme #' + (idx+1) + ' : Longueur requise (>0)'}); if(wEl) wEl.classList.add('invalid'); }
+    } else {
+      if(wVal === '' || Number(wVal) <= 0){ errors.push({idx, msg: 'La forme #' + (idx+1) + ' : Longueur requise (>0)'}); if(wEl) wEl.classList.add('invalid'); }
+      if(hVal === '' || Number(hVal) <= 0){ errors.push({idx, msg: 'La forme #' + (idx+1) + ' : Largeur requise (>0)'}); if(hEl) hEl.classList.add('invalid'); }
+    }
+  });
+  return errors;
+}
+
+// ---------- compute both algorithms ----------
+function calculateAll(){
+  savePiecesToState();
+  const errors = validateForms();
+  if(errors.length){
+    validationMessage.innerHTML = errors.map(e=>escapeHtml(e.msg)).join('<br>');
+    validationModal.classList.add('active'); validationOk.focus();
+    const firstInvalid = document.querySelector('.invalid'); if(firstInvalid) firstInvalid.scrollIntoView({behavior:'smooth', block:'center'});
+    return false;
+  }
+
+  const items = buildItemsFromState();
+  const paperW = (state.orientation === 'landscape') ? state.paper.h : state.paper.w;
+  const paperH = (state.orientation === 'landscape') ? state.paper.w : state.paper.h;
+  const kerf = state.kerf || 0;
+
+  state.results = {};
+  state.results['shelf'] = { bins: shelfPack(items, paperW, paperH, kerf), algo: 'shelf' };
+  state.results['maxrects'] = { bins: maxRectsPack(items, paperW, paperH, kerf), algo: 'maxrects' };
+
+  Object.keys(state.results).forEach(k => { state.currentSheetIndex[k] = 0; if(typeof state.zoomByAlgo[k] === 'undefined') state.zoomByAlgo[k] = 1; });
+
+  renderAllResults();
+  return true;
+}
+
+// ---------- render stacked results with thumbnail strip; metrics in header (cm²) ----------
+function renderAllResults(){
+  resultsArea.innerHTML = '';
+  const keys = Object.keys(state.results || {});
+  if(keys.length === 0){
+    resultsArea.innerHTML = '<div class="help-block">Aucun calcul pour le moment. Cliquez sur « Calculer l\u2019optimisation ».</div>';
+    return;
+  }
+
+  keys.forEach(key => {
+    const res = state.results[key];
+    const bins = res.bins;
+    if(typeof state.zoomByAlgo[key] === 'undefined') state.zoomByAlgo[key] = 1;
+    const idx = Math.min(state.currentSheetIndex[key] || 0, Math.max(0, bins.length-1));
+
+    const card = document.createElement('div'); card.className = 'result-card';
+
+    // header: title + inline metrics (in cm²)
+    const header = document.createElement('div'); header.style.display = 'flex'; header.style.justifyContent = 'space-between'; header.style.alignItems = 'center';
+    const leftHead = document.createElement('div');
+    leftHead.innerHTML = '<strong>' + (key === 'shelf' ? 'Solution 1' : 'Solution 2') + '</strong>';
+    header.appendChild(leftHead);
+
+    const rightHead = document.createElement('div'); rightHead.className = 'header-right';
+    // metrics placeholders
+    const mSheets = document.createElement('div'); mSheets.className='header-metric'; mSheets.innerHTML = '<div class="m-label">Feuilles</div><div class="m-value">—</div>';
+    const mUsed = document.createElement('div'); mUsed.className='header-metric'; mUsed.innerHTML = '<div class="m-label">Utilisé</div><div class="m-value">— cm²</div>';
+    const mPct = document.createElement('div'); mPct.className='header-metric'; mPct.innerHTML = '<div class="m-label">Taux</div><div class="m-value">—%</div>';
+    const mWaste = document.createElement('div'); mWaste.className='header-metric'; mWaste.innerHTML = '<div class="m-label">Chute</div><div class="m-value">— cm²</div>';
+    rightHead.appendChild(mSheets); rightHead.appendChild(mUsed); rightHead.appendChild(mPct); rightHead.appendChild(mWaste);
+    header.appendChild(rightHead);
+
+    // controls (arrows + export)
+    const controls = document.createElement('div'); controls.style.display='flex'; controls.style.gap='8px'; controls.style.marginTop='8px';
+    const prevBtn = document.createElement('button'); prevBtn.className='btn ghost'; prevBtn.textContent='←';
+    const indexSpan = document.createElement('span'); indexSpan.className='meta-info';
+    const nextBtn = document.createElement('button'); nextBtn.className='btn ghost'; nextBtn.textContent='→';
+    const exportBtn = document.createElement('button'); exportBtn.className='btn ghost'; exportBtn.textContent='Exporter SVG';
+    controls.appendChild(prevBtn); controls.appendChild(indexSpan); controls.appendChild(nextBtn); controls.appendChild(exportBtn);
+
+    card.appendChild(header);
+
+    // pages row (main + thumbs)
+    const pagesRow = document.createElement('div'); pagesRow.className='pages-row';
+    const mainViewWrap = document.createElement('div'); mainViewWrap.className='main-view';
+    const mainSvg = document.createElementNS('http://www.w3.org/2000/svg','svg'); mainSvg.setAttribute('preserveAspectRatio','xMinYMin meet'); mainSvg.style.width='100%'; mainSvg.style.height='520px';
+    mainViewWrap.appendChild(mainSvg);
+    pagesRow.appendChild(mainViewWrap);
+
+    const thumbsColumn = document.createElement('div'); thumbsColumn.className='thumbs-column';
+    pagesRow.appendChild(thumbsColumn);
+    card.appendChild(pagesRow);
+
+    // add controls under header
+    card.appendChild(controls);
+
+    resultsArea.appendChild(card);
+
+    // render helpers
+    function renderBin(svgEl, b, zoom){
+      while(svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+      const ns = 'http://www.w3.org/2000/svg';
+      const bg = document.createElementNS(ns,'rect'); bg.setAttribute('x',0); bg.setAttribute('y',0); bg.setAttribute('width', b.width); bg.setAttribute('height', b.height);
+      bg.setAttribute('fill','#fff'); bg.setAttribute('stroke','#cbd5e1'); svgEl.appendChild(bg);
+      let usedAreaVal = 0;
+      b.rects.forEach(r=>{
+        const meta = r.meta || {};
+        const kerf = state.kerf || 0;
+        const innerX = r.x + kerf/2;
+        const innerY = r.y + kerf/2;
+        const innerW = Math.max(0, (meta.rotated ? meta.originalH : meta.originalW));
+        const innerH = Math.max(0, (meta.rotated ? meta.originalW : meta.originalH));
+        const outer = document.createElementNS(ns,'rect'); outer.setAttribute('x', r.x); outer.setAttribute('y', r.y); outer.setAttribute('width', r.width); outer.setAttribute('height', r.height); outer.setAttribute('fill','#e6f2ff'); outer.setAttribute('stroke','#0A66C2'); outer.setAttribute('stroke-width',0.4); svgEl.appendChild(outer);
+        const inner = document.createElementNS(ns,'rect'); inner.setAttribute('x', innerX); inner.setAttribute('y', innerY); inner.setAttribute('width', innerW); inner.setAttribute('height', innerH); inner.setAttribute('fill','#cfe8ff'); inner.setAttribute('stroke','#07539a'); inner.setAttribute('stroke-width',0.3); svgEl.appendChild(inner);
+        const label = document.createElementNS(ns,'text'); label.setAttribute('x', innerX + 2); label.setAttribute('y', innerY + 8); label.setAttribute('font-size', 3.5); label.setAttribute('fill','#06345e');
+        label.textContent = (meta.name || '') + ' ' + (meta.originalW || '') + '×' + (meta.originalH || '') + (meta.rotated ? ' (rot)' : ''); svgEl.appendChild(label);
+        usedAreaVal += innerW * innerH;
+      });
+      const totalArea = b.width * b.height;
+      const wasteAreaVal = Math.max(0, totalArea - usedAreaVal);
+      const pct = totalArea > 0 ? Math.round((usedAreaVal / totalArea) * 1000)/10 : 0;
+      const zoomFactor = Math.max(0.125, Math.min(8, zoom || 1));
+      const vbW = b.width / zoomFactor; const vbH = b.height / zoomFactor;
+      const vbX = Math.max(0, (b.width - vbW) / 2); const vbY = Math.max(0, (b.height - vbH) / 2);
+      svgEl.setAttribute('viewBox', vbX + ' ' + vbY + ' ' + vbW + ' ' + vbH);
+      return { usedAreaVal, wasteAreaVal, pct };
+    }
+
+    // build thumbs
+    thumbsColumn.innerHTML = '';
+    const thumbEls = [];
+    bins.forEach((b,i) => {
+      const thumb = document.createElement('div'); thumb.className='thumb'; thumb.dataset.idx = i;
+      const svgThumb = document.createElementNS('http://www.w3.org/2000/svg','svg');
+      svgThumb.setAttribute('preserveAspectRatio','xMidYMid meet');
+      svgThumb.setAttribute('viewBox', `0 0 ${b.width} ${b.height}`);
+      thumb.appendChild(svgThumb);
+      renderBin(svgThumb,b,1);
+      thumbsColumn.appendChild(thumb);
+      thumbEls.push(thumb);
+      thumb.addEventListener('click', ()=>{
+        state.currentSheetIndex[key] = i;
+        const stats = renderBin(mainSvg, bins[i], state.zoomByAlgo[key]);
+        // update header metrics (convert to cm²)
+        mSheets.querySelector('.m-value').textContent = bins.length;
+        mUsed.querySelector('.m-value').textContent = fmtCm2(stats.usedAreaVal) + ' cm²';
+        mPct.querySelector('.m-value').textContent = stats.pct + '%';
+        mWaste.querySelector('.m-value').textContent = fmtCm2(stats.wasteAreaVal) + ' cm²';
+        thumbEls.forEach(t => t.classList.remove('selected'));
+        thumb.classList.add('selected');
+        indexSpan.textContent = (i+1) + ' / ' + bins.length;
+        thumb.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'});
+      });
+    });
+
+    if(thumbEls[idx]) thumbEls[idx].classList.add('selected');
+
+    // initial main render
+    if(bins.length > 0){
+      const stats = renderBin(mainSvg, bins[idx], state.zoomByAlgo[key]);
+      mSheets.querySelector('.m-value').textContent = bins.length;
+      mUsed.querySelector('.m-value').textContent = fmtCm2(stats.usedAreaVal) + ' cm²';
+      mPct.querySelector('.m-value').textContent = stats.pct + '%';
+      mWaste.querySelector('.m-value').textContent = fmtCm2(stats.wasteAreaVal) + ' cm²';
+      indexSpan.textContent = (idx+1) + ' / ' + bins.length;
+    } else {
+      mSheets.querySelector('.m-value').textContent = '0';
+      mUsed.querySelector('.m-value').textContent = '0.0 cm²';
+      mPct.querySelector('.m-value').textContent = '0%';
+      mWaste.querySelector('.m-value').textContent = '0.0 cm²';
+      indexSpan.textContent = '0 / 0';
+    }
+
+    // prev/next handlers update main and header metrics and select thumb
+    prevBtn.addEventListener('click', ()=>{
+      const cur = Math.max(0, (state.currentSheetIndex[key] || 0) - 1);
+      state.currentSheetIndex[key] = cur;
+      const b = bins[cur]; if(!b) return;
+      const stats = renderBin(mainSvg,b,state.zoomByAlgo[key]);
+      thumbEls.forEach(t=>t.classList.remove('selected'));
+      if(thumbEls[cur]){ thumbEls[cur].classList.add('selected'); thumbEls[cur].scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}); }
+      mSheets.querySelector('.m-value').textContent = bins.length;
+      mUsed.querySelector('.m-value').textContent = fmtCm2(stats.usedAreaVal) + ' cm²';
+      mPct.querySelector('.m-value').textContent = stats.pct + '%';
+      mWaste.querySelector('.m-value').textContent = fmtCm2(stats.wasteAreaVal) + ' cm²';
+      indexSpan.textContent = (cur+1) + ' / ' + bins.length;
+    });
+    nextBtn.addEventListener('click', ()=>{
+      const cur = Math.min(bins.length - 1, (state.currentSheetIndex[key] || 0) + 1);
+      state.currentSheetIndex[key] = cur;
+      const b = bins[cur]; if(!b) return;
+      const stats = renderBin(mainSvg,b,state.zoomByAlgo[key]);
+      thumbEls.forEach(t=>t.classList.remove('selected'));
+      if(thumbEls[cur]){ thumbEls[cur].classList.add('selected'); thumbEls[cur].scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'}); }
+      mSheets.querySelector('.m-value').textContent = bins.length;
+      mUsed.querySelector('.m-value').textContent = fmtCm2(stats.usedAreaVal) + ' cm²';
+      mPct.querySelector('.m-value').textContent = stats.pct + '%';
+      mWaste.querySelector('.m-value').textContent = fmtCm2(stats.wasteAreaVal) + ' cm²';
+      indexSpan.textContent = (cur+1) + ' / ' + bins.length;
+    });
+
+    // wheel zoom on mainSvg (per-card)
+    mainSvg.addEventListener('wheel', (ev)=>{
+      ev.preventDefault();
+      const delta = ev.deltaY;
+      if(delta < 0) state.zoomByAlgo[key] = Math.min(8, (state.zoomByAlgo[key] || 1) * 1.1);
+      else state.zoomByAlgo[key] = Math.max(0.125, (state.zoomByAlgo[key] || 1) / 1.1);
+      const cur = state.currentSheetIndex[key] || 0;
+      const b = bins[cur]; if(!b) return;
+      const stats = renderBin(mainSvg, b, state.zoomByAlgo[key]);
+      mUsed.querySelector('.m-value').textContent = fmtCm2(stats.usedAreaVal) + ' cm²';
+      mPct.querySelector('.m-value').textContent = stats.pct + '%';
+      mWaste.querySelector('.m-value').textContent = fmtCm2(stats.wasteAreaVal) + ' cm²';
+    }, {passive:false});
+
+    // export full sheet (same as before)
+    exportBtn.addEventListener('click', ()=>{
+      const currentIndex = state.currentSheetIndex[key] || 0;
+      const binsLocal = res.bins;
+      if(!binsLocal || binsLocal.length === 0){ alert('Aucune feuille \u00e0 exporter pour cette solution.'); return; }
+      const b = binsLocal[currentIndex];
+      const ns = 'http://www.w3.org/2000/svg';
+      const svgDoc = document.createElementNS(ns,'svg'); svgDoc.setAttribute('xmlns', ns);
+      svgDoc.setAttribute('width', b.width + 'mm'); svgDoc.setAttribute('height', b.height + 'mm'); svgDoc.setAttribute('viewBox', '0 0 ' + b.width + ' ' + b.height);
+      const bg = document.createElementNS(ns,'rect'); bg.setAttribute('x',0); bg.setAttribute('y',0); bg.setAttribute('width', b.width); bg.setAttribute('height', b.height); bg.setAttribute('fill','#fff'); svgDoc.appendChild(bg);
+      b.rects.forEach(r=>{
+        const meta = r.meta || {};
+        const kerf = state.kerf || 0;
+        const innerX = r.x + kerf/2;
+        const innerY = r.y + kerf/2;
+        const innerW = Math.max(0, (meta.rotated ? meta.originalH : meta.originalW));
+        const innerH = Math.max(0, (meta.rotated ? meta.originalW : meta.originalH));
+        const outer = document.createElementNS(ns,'rect'); outer.setAttribute('x', r.x); outer.setAttribute('y', r.y); outer.setAttribute('width', r.width); outer.setAttribute('height', r.height); outer.setAttribute('fill','#e6f2ff'); outer.setAttribute('stroke','#0A66C2'); outer.setAttribute('stroke-width',0.4); svgDoc.appendChild(outer);
+        const inner = document.createElementNS(ns,'rect'); inner.setAttribute('x', innerX); inner.setAttribute('y', innerY); inner.setAttribute('width', innerW); inner.setAttribute('height', innerH); inner.setAttribute('fill','#cfe8ff'); inner.setAttribute('stroke','#07539a'); inner.setAttribute('stroke-width',0.3); svgDoc.appendChild(inner);
+        const label = document.createElementNS(ns,'text'); label.setAttribute('x', innerX + 2); label.setAttribute('y', innerY + 8); label.setAttribute('font-size', 3.5); label.setAttribute('fill','#06345e');
+        label.textContent = (meta.name || '') + ' ' + (meta.originalW || '') + '×' + (meta.originalH || '') + (meta.rotated ? ' (rot)' : ''); svgDoc.appendChild(label);
+      });
+      const str = '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(svgDoc);
+      download('decoupe_' + key + '_sheet_' + (currentIndex+1) + '.svg', str, 'image/svg+xml');
+    });
+
+  }); // end keys.forEach
+}
+
+// ---------- save/load ----------
+saveBtn.addEventListener('click', ()=>{
+  savePiecesToState();
+  const name = prompt('Nom du projet (sauvegarde locale) :', 'Projet');
+  if(!name) return;
+  const save = { meta:{name, date: new Date().toISOString()}, state };
+  const sKey = 'cutplanner_saves';
+  const cur = JSON.parse(localStorage.getItem(sKey) || '{}');
+  cur[name] = save;
+  localStorage.setItem(sKey, JSON.stringify(cur));
+  alert('Projet sauvegardé localement.');
+});
+loadBtn.addEventListener('click', ()=>{
+  const sKey = 'cutplanner_saves';
+  const cur = JSON.parse(localStorage.getItem(sKey) || '{}');
+  const names = Object.keys(cur);
+  if(names.length === 0){ alert('Aucune sauvegarde locale trouv\u00e9e'); return; }
+  const choice = prompt('Nom du projet \u00e0 charger:\n' + names.join('\n'));
+  if(!choice || !cur[choice]) return;
+  state = cur[choice].state;
+  kerfInput.value = state.kerf;
+  paperSelect.value = state.paper.name === 'A4' ? 'A4' : (state.paper.name === '305x305' ? 'SQR' : 'CUSTOM');
+  if(paperSelect.value === 'CUSTOM'){ customPaperInputs.style.display='block'; customW.value = state.paper.w; customH.value = state.paper.h; } else { customPaperInputs.style.display='none'; }
+  orientationSelect.value = state.orientation;
+  loadPiecesFromState();
+  renderAllResults();
+  alert('Projet charg\u00e9.');
+});
+
+// ---------- confirmations ----------
+confirmCancel.addEventListener('click', ()=>{ pendingRemoveElement = null; confirmModal.classList.remove('active'); });
+confirmModal.addEventListener('click', (e)=>{ if(e.target === confirmModal){ pendingRemoveElement = null; confirmModal.classList.remove('active'); }});
+confirmYes.addEventListener('click', ()=>{ if(pendingRemoveElement){ pendingRemoveElement.remove(); pendingRemoveElement = null; savePiecesToState(); } confirmModal.classList.remove('active'); });
+
+confirmClearCancel.addEventListener('click', ()=>{ confirmClearAllModal.classList.remove('active'); });
+confirmClearAllModal.addEventListener('click', (e)=>{ if(e.target === confirmClearAllModal){ confirmClearAllModal.classList.remove('active'); }});
+confirmClearYes.addEventListener('click', ()=>{ piecesContainer.innerHTML = ''; savePiecesToState(); confirmClearAllModal.classList.remove('active'); });
+
+validationOk.addEventListener('click', ()=>{ validationModal.classList.remove('active'); });
+
+// ---------- wiring ----------
+addFormBtn.addEventListener('click', ()=>{ createFormRow(); savePiecesToState(); });
+clearFormsBtn.addEventListener('click', ()=>{ confirmClearAllModal.classList.add('active'); confirmClearCancel.focus(); });
+calcBtn.addEventListener('click', ()=>{ calculateAll(); });
+clearLayoutBtn.addEventListener('click', ()=>{ state.results = {}; state.currentSheetIndex = {}; renderAllResults(); });
+
+// Fit all: reset zoom for all algos and re-render
+globalZoomFit.addEventListener('click', ()=>{
+  Object.keys(state.zoomByAlgo).forEach(k => state.zoomByAlgo[k] = 1);
+  renderAllResults();
+});
+
+// init
+paperSelect.dispatchEvent(new Event('change'));
+loadPiecesFromState();
+renderAllResults();
+</script>
+</body>
+</html>
