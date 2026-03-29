@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Optimiseur découpe v2</title>
+<style>
+:root{--bg:#f5f7fa;--card:#fff;--primary:#0A66C2;--muted:#6b7280;--danger:#e02424;--success:#059669;--border:#e6eef8;}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);color:#111;}
+header{height:56px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 16px;box-shadow:0 1px 0 rgba(0,0,0,.08);}
+.container{display:flex;height:calc(100vh - 56px);}
+.sidebar{width:420px;min-width:260px;background:var(--card);padding:16px;box-shadow:1px 0 0 rgba(0,0,0,.06);overflow:auto;flex-shrink:0;}
+.main{flex:1;display:flex;flex-direction:column;gap:8px;padding:12px;overflow:auto;}
+.section-title{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:10px 0 6px;}
+.btn{background:var(--primary);color:#fff;border:none;padding:7px 12px;border-radius:6px;cursor:pointer;font-size:13px;}
+.btn.ghost{background:transparent;color:var(--primary);border:1px solid rgba(10,102,194,.3);}
+.btn:hover{opacity:.88;}
+.result-card{background:#fff;border-radius:10px;padding:12px;border:1px solid var(--border);box-shadow:0 4px 16px rgba(2,6,23,.04);margin-bottom:14px;}
+.meta-info{font-size:12px;color:var(--muted);}
+.piece-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;padding:8px 8px 8px 12px;background:#fbfdff;border-radius:8px;border:1px solid #eef2f7;flex-wrap:wrap;}
+.field-labels,.field-inputs{display:flex;gap:8px;align-items:center;width:100%;}
+.field-cell{width:110px;display:flex;flex-direction:column;}
+.field-cell.sm{width:80px;}
+.field-cell .lab{font-size:11px;color:var(--muted);margin-bottom:3px;white-space:nowrap;}
+.field-cell input[type=number]{width:100%;box-sizing:border-box;padding:6px;border-radius:4px;border:1px solid #dbeafe;font-size:13px;}
+.piece-actions{display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:6px;}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;background:transparent;cursor:pointer;}
+.icon-btn.del{border:1px solid rgba(224,36,36,.18);color:var(--danger);}
+.icon-btn.dup{border:1px solid rgba(5,150,105,.18);color:var(--success);}
+.icon-btn svg{width:15px;height:15px;fill:currentColor;}
+input[disabled]{background:#f3f4f6;color:var(--muted);cursor:not-allowed;}
+.invalid{border-color:var(--danger)!important;box-shadow:0 0 0 2px rgba(224,36,36,.08);}
+.help-block{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5;}
+select{padding:6px 8px;border-radius:4px;border:1px solid #dbeafe;font-size:13px;background:#fff;}
+/* Badge */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;}
+.badge.winner{background:#d1fae5;color:#065f46;}
+.badge.algo{background:#e0eeff;color:#0a4a90;}
+/* Metrics */
+.metrics-bar{display:flex;gap:0;flex-wrap:wrap;margin-top:10px;border-radius:8px;border:1px solid var(--border);overflow:hidden;}
+.metric-item{flex:1;min-width:80px;padding:8px 12px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--border);}
+.metric-item:last-child{border-right:none;}
+.metric-item .m-label{font-size:11px;color:var(--muted);}
+.metric-item .m-value{font-size:15px;font-weight:700;color:#0a4a90;}
+.metric-item .m-value.good{color:var(--success);}
+.metric-item .m-value.warn{color:#b45309;}
+.metric-item .m-value.bad{color:var(--danger);}
+/* Legend */
+.legend{display:flex;flex-wrap:wrap;gap:8px;padding:8px 10px;background:#f8fbff;border-radius:6px;border:1px solid var(--border);margin-top:8px;}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:12px;}
+.legend-swatch{width:11px;height:11px;border-radius:2px;flex-shrink:0;}
+/* Pages layout */
+.pages-row{display:flex;align-items:flex-start;gap:10px;margin-top:10px;}
+.main-view{flex:0 0 64%;min-width:320px;}
+.thumbs-col{flex:1;display:flex;flex-direction:row;flex-wrap:nowrap;gap:6px;overflow-x:auto;padding:4px 2px;align-items:flex-start;}
+.thumb-wrap{display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;}
+.thumb{width:130px;height:110px;background:#fff;border-radius:6px;border:1px solid var(--border);cursor:pointer;overflow:hidden;}
+.thumb.selected{outline:3px solid rgba(10,102,194,.5);outline-offset:1px;}
+.thumb svg{width:100%;height:100%;}
+.ctrl-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;}
+/* Modal */
+.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.35);z-index:40;}
+.modal.active{display:flex;}
+.modal .card{background:#fff;padding:20px;border-radius:10px;width:90%;max-width:480px;}
+.modal .card h3{margin:0 0 8px;}
+.error-list{color:var(--danger);margin:8px 0;font-size:13px;line-height:1.6;}
+@media(max-width:900px){.main-view{flex-basis:55%;min-width:260px;}.thumb{width:90px;height:75px;}}
+@media(max-width:650px){.pages-row{flex-direction:column;}.main-view{width:100%;flex-basis:auto;}}
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <span style="font-size:18px;">✂️</span>
+    <strong>Optimiseur découpe</strong>
+    <span class="meta-info" style="color:rgba(255,255,255,.6)">v2 — prototype</span>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <button class="btn ghost" id="loadBtn" style="color:#fff;border-color:rgba(255,255,255,.35)">Charger</button>
+    <button class="btn ghost" id="saveBtn" style="color:#fff;border-color:rgba(255,255,255,.35)">Sauvegarder</button>
+  </div>
+</header>
+
+<div class="container">
+<aside class="sidebar">
+  <div class="section-title">Format papier</div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <select id="paperSelect">
+      <option value="A4">A4 — 210 × 297 mm</option>
+      <option value="A3">A3 — 297 × 420 mm</option>
+      <option value="SQR">305 × 305 mm (scrap)</option>
+      <option value="CUSTOM">Personnalisé…</option>
+    </select>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <label class="meta-info">Orient.</label>
+      <select id="orientation"><option value="portrait">Portrait</option><option value="landscape">Paysage</option></select>
+    </div>
+  </div>
+  <div id="customPaperInputs" style="display:none;margin-top:8px;gap:8px;align-items:flex-end;">
+    <div><div class="meta-info" style="margin-bottom:3px;">Larg. (mm)</div><input id="customW" type="number" value="210" style="width:80px;padding:6px;border:1px solid #dbeafe;border-radius:4px;font-size:13px;"></div>
+    <div><div class="meta-info" style="margin-bottom:3px;">Haut. (mm)</div><input id="customH" type="number" value="297" style="width:80px;padding:6px;border:1px solid #dbeafe;border-radius:4px;font-size:13px;"></div>
+  </div>
+
+  <div class="section-title" style="margin-top:14px;">Paramètres</div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <label class="meta-info">Kerf (mm)</label>
+    <input id="kerf" type="number" value="0" step="0.1" style="width:70px;padding:6px;border:1px solid #dbeafe;border-radius:4px;font-size:13px;">
+    <span class="meta-info">espace de coupe</span>
+  </div>
+
+  <div class="section-title" style="margin-top:14px;">Pièces à découper</div>
+  <div style="display:flex;gap:8px;margin-bottom:8px;">
+    <button class="btn" id="addFormBtn">+ Ajouter</button>
+    <button class="btn ghost" id="clearFormsBtn">Effacer tout</button>
+  </div>
+  <div id="piecesContainer" aria-live="polite"></div>
+  <div class="help-block">Dimensions en mm. « Carré » verrouille la largeur sur la longueur. La rotation 90° est activée par défaut pour les rectangles.</div>
+</aside>
+
+<main class="main">
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <button class="btn" id="calcBtn">▶ Calculer l'optimisation</button>
+    <button class="btn ghost" id="clearLayoutBtn">Réinitialiser</button>
+
+  </div>
+  <div id="resultsArea"></div>
+</main>
+</div>
+
+<!-- Modals -->
+<div id="confirmModal" class="modal"><div class="card">
+  <h3>Supprimer cette pièce ?</h3><p style="font-size:13px;color:var(--muted);">Cette action est définitive.</p>
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+    <button id="confirmCancel" class="btn ghost">Annuler</button>
+    <button id="confirmYes" class="btn" style="background:var(--danger)">Supprimer</button>
+  </div>
+</div></div>
+
+<div id="confirmClearModal" class="modal"><div class="card">
+  <h3>Effacer toutes les pièces ?</h3><p style="font-size:13px;color:var(--muted);">Toutes les pièces seront supprimées.</p>
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+    <button id="clearCancel" class="btn ghost">Annuler</button>
+    <button id="clearYes" class="btn" style="background:var(--danger)">Effacer tout</button>
+  </div>
+</div></div>
+
+<div id="validationModal" class="modal"><div class="card">
+  <h3>Erreurs de saisie</h3>
+  <div id="validationMsg" class="error-list"></div>
+  <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+    <button id="validationOk" class="btn">OK, corriger</button>
+  </div>
+</div></div>
+
+<script>
+'use strict';
+
+// ── Couleurs ─────────────────────────────────────────────────────────────────
+const PALETTE = ['#4e79a7','#e8682a','#e15759','#3aa76d','#b07aa1','#9c755f','#499894','#d4a017','#7b4f9e','#d37295','#59a14f','#1787c4'];
+function strHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))&0x7fffffff;return h;}
+function pieceColor(id){return PALETTE[strHash(String(id))%PALETTE.length];}
+function lighten(hex,t){
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return`rgb(${Math.round(r+(255-r)*t)},${Math.round(g+(255-g)*t)},${Math.round(b+(255-b)*t)})`;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const qs=s=>document.querySelector(s);
+function dl(name,content,mime='image/svg+xml'){const b=new Blob([content],{type:mime}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);}
+function fmtCm2(mm2){return((Number(mm2)||0)/100).toLocaleString('fr-FR',{maximumFractionDigits:1});}
+function effClass(p){return p>=80?'good':p>=55?'warn':'bad';}
+
+// ── State ────────────────────────────────────────────────────────────────────
+let S={paper:{w:210,h:297,name:'A4'},orientation:'portrait',kerf:0,pieces:[],results:{},curSheet:{},zoom:{}};
+
+// ── Refs ─────────────────────────────────────────────────────────────────────
+const piecesContainer=qs('#piecesContainer');
+const paperSel=qs('#paperSelect'),custInputs=qs('#customPaperInputs'),custW=qs('#customW'),custH=qs('#customH');
+const orientSel=qs('#orientation'),kerfInput=qs('#kerf');
+const resultsArea=qs('#resultsArea');
+let pendingDel=null;
+
+// ── Formulaire pièce ─────────────────────────────────────────────────────────
+function mkRow(p=null){
+  const id=p?.id||('f'+Math.random().toString(36).slice(2,8));
+  const isSquare=!!(p?.isSquare);
+  const rot=p?.allowRotation??true;
+  const color=pieceColor(id);
+  const el=document.createElement('div');
+  el.className='piece-row'; el.dataset.id=id;
+  el.style.borderLeft=`3px solid ${color}`;
+  el.innerHTML=`
+    <div style="display:flex;gap:8px;align-items:center;width:100%;">
+      <input class="pname" placeholder="Nom de la pièce" value="${esc(p?.name||'')}" style="flex:1;padding:6px;border:1px solid #dbeafe;border-radius:4px;font-size:13px;">
+      <label style="display:flex;gap:5px;align-items:center;font-size:13px;cursor:pointer;white-space:nowrap;">
+        <input type="checkbox" class="sq" ${isSquare?'checked':''}> Carré
+      </label>
+    </div>
+    <div style="width:100%;margin-top:4px;">
+      <div class="field-labels">
+        <div class="field-cell"><div class="lab">Longueur (mm)</div></div>
+        <div class="field-cell"><div class="lab">Largeur (mm)</div></div>
+        <div class="field-cell sm"><div class="lab">Qté</div></div>
+      </div>
+      <div class="field-inputs">
+        <div class="field-cell"><input class="pw" type="number" step="0.1" value="${p?.w||''}"></div>
+        <div class="field-cell"><input class="ph" type="number" step="0.1" value="${p?.h||''}"></div>
+        <div class="field-cell sm"><input class="pq" type="number" min="1" value="${p?.qty||1}" style="width:100%;"></div>
+      </div>
+    </div>
+    <div class="piece-actions">
+      <label style="display:flex;gap:5px;align-items:center;font-size:13px;cursor:pointer;">
+        <input class="pr" type="checkbox" ${rot?'checked':''}> Rotation 90° auto.
+      </label>
+      <div style="display:flex;gap:6px;">
+        <button class="icon-btn dup" title="Dupliquer"><svg viewBox="0 0 24 24"><path d="M8 7h9v11H8zM5 4h9v2H5z"/></svg></button>
+        <button class="icon-btn del" title="Supprimer"><svg viewBox="0 0 24 24"><path d="M3 6h18v2H3V6zm2 3h14l-1.2 11.2c-.1.9-.9 1.8-1.9 1.8H8.1c-1 0-1.8-.9-1.9-1.8L5 9zM9 4V3c0-.6.4-1 1-1h4c.6 0 1 .4 1 1v1h5v2H4V4h5z"/></svg></button>
+      </div>
+    </div>`;
+  piecesContainer.appendChild(el);
+
+  const nm=el.querySelector('.pname'),sq=el.querySelector('.sq');
+  const pw=el.querySelector('.pw'),ph=el.querySelector('.ph'),pq=el.querySelector('.pq'),pr=el.querySelector('.pr');
+
+  function applySquare(v){
+    if(v){ph.value=pw.value;ph.disabled=true;pr.checked=false;pr.disabled=true;}
+    else{ph.disabled=false;pr.disabled=false;}
+    save();
+  }
+  sq.addEventListener('change',e=>applySquare(e.target.checked));
+  pw.addEventListener('input',()=>{if(sq.checked)ph.value=pw.value;save();});
+  [ph,pq,nm,pr].forEach(i=>i.addEventListener('input',save));
+  el.querySelector('.dup').addEventListener('click',()=>{
+    mkRow({id:'f'+Math.random().toString(36).slice(2,8),name:nm.value,w:+pw.value||0,h:+ph.value||0,qty:+pq.value||1,isSquare:sq.checked,allowRotation:pr.checked});
+    save();
+  });
+  el.querySelector('.del').addEventListener('click',()=>{pendingDel=el;qs('#confirmModal').classList.add('active');qs('#confirmCancel').focus();});
+  applySquare(isSquare);
+}
+
+function save(){
+  S.pieces=Array.from(piecesContainer.children).map(n=>({
+    id:n.dataset.id, name:n.querySelector('.pname').value||'',
+    isSquare:!!n.querySelector('.sq').checked,
+    w:+n.querySelector('.pw').value||0, h:+n.querySelector('.ph').value||0,
+    qty:Math.max(1,+n.querySelector('.pq').value||1),
+    allowRotation:n.querySelector('.sq').checked?false:!!n.querySelector('.pr').checked
+  }));
+  try{localStorage.setItem('copt_tmp',JSON.stringify(S));}catch(e){}
+}
+function loadRows(){piecesContainer.innerHTML='';(S.pieces||[]).forEach(p=>mkRow(p));}
+
+// ── Paper UI ─────────────────────────────────────────────────────────────────
+paperSel.addEventListener('change',()=>{
+  const v=paperSel.value,presets={A4:{w:210,h:297},A3:{w:297,h:420},SQR:{w:305,h:305}};
+  if(presets[v]){S.paper={...presets[v],name:v};custInputs.style.display='none';}
+  else{custInputs.style.display='flex';S.paper={w:+custW.value||210,h:+custH.value||297,name:'custom'};}
+});
+custW.addEventListener('change',()=>S.paper.w=+custW.value||210);
+custH.addEventListener('change',()=>S.paper.h=+custH.value||297);
+orientSel.addEventListener('change',()=>S.orientation=orientSel.value);
+kerfInput.addEventListener('change',()=>S.kerf=+kerfInput.value||0);
+
+// ── Shelf packing (FFDH — First Fit Decreasing Height) ────────────────────────
+function shelfPack(items,W,H,kerf){
+  const k=Math.max(0,kerf||0);
+  // Tri hauteur décroissante — améliore significativement le remplissage
+  const sorted=[...items].sort((a,b)=>b.h-a.h);
+  const bins=[];
+  const newBin=()=>({width:W,height:H,rects:[],rows:[],usedArea:0});
+  bins.push(newBin());
+
+  for(const it of sorted){
+    const sizes=[{w:it.w+k,h:it.h+k,rot:false}];
+    if(it.allowRotation&&it.w!==it.h) sizes.push({w:it.h+k,h:it.w+k,rot:true});
+    let placed=false;
+
+    for(const bin of bins){
+      for(const s of sizes){
+        if(s.w>bin.width||s.h>bin.height) continue;
+        // Essayer une ligne existante
+        for(const row of bin.rows){
+          if(row.x+s.w<=bin.width&&s.h<=row.height){
+            bin.rects.push({x:row.x,y:row.y,width:s.w,height:s.h,meta:{id:it.id,name:it.name,originalW:it.origW,originalH:it.origH,rotated:s.rot}});
+            bin.usedArea+=it.origW*it.origH; row.x+=s.w; placed=true; break;
+          }
+        }
+        if(placed) break;
+        // Nouvelle ligne
+        const usedH=bin.rows.reduce((a,r)=>Math.max(a,r.y+r.height),0);
+        if(usedH+s.h<=bin.height){
+          const row={x:s.w,y:usedH,height:s.h}; bin.rows.push(row);
+          bin.rects.push({x:0,y:row.y,width:s.w,height:s.h,meta:{id:it.id,name:it.name,originalW:it.origW,originalH:it.origH,rotated:s.rot}});
+          bin.usedArea+=it.origW*it.origH; placed=true; break;
+        }
+      }
+      if(placed) break;
+    }
+    if(!placed){
+      const nb=newBin();
+      const s=sizes.find(s=>s.w<=W&&s.h<=H)||{w:Math.min(sizes[0].w,W),h:Math.min(sizes[0].h,H),rot:false};
+      nb.rows.push({x:s.w,y:0,height:s.h});
+      nb.rects.push({x:0,y:0,width:s.w,height:s.h,meta:{id:it.id,name:it.name,originalW:it.origW,originalH:it.origH,rotated:s.rot}});
+      nb.usedArea+=it.origW*it.origH; bins.push(nb);
+    }
+  }
+  return bins;
+}
+
+// ── MaxRects packing ─────────────────────────────────────────────────────────
+function mkPacker(W,H){
+  return{
+    free:[{x:0,y:0,w:W,h:H}],
+    place(w,h,canRot){
+      let best=null;
+      const cands=[{w,h,rot:false}];
+      if(canRot&&w!==h) cands.push({w:h,h:w,rot:true});
+      for(const c of cands){
+        for(const fr of this.free){
+          if(c.w<=fr.w&&c.h<=fr.h){
+            const score=Math.min(fr.w-c.w,fr.h-c.h)*100000+Math.max(fr.w-c.w,fr.h-c.h);
+            if(!best||score<best.score) best={score,fr,x:fr.x,y:fr.y,w:c.w,h:c.h,rot:c.rot};
+          }
+        }
+      }
+      if(!best) return null;
+      const {fr,x,y,w:pw,h:ph,rot}=best;
+      const i=this.free.indexOf(fr); if(i>=0) this.free.splice(i,1);
+      if(fr.w-pw>0) this.free.push({x:fr.x+pw,y:fr.y,w:fr.w-pw,h:ph});
+      if(fr.h-ph>0) this.free.push({x:fr.x,y:fr.y+ph,w:fr.w,h:fr.h-ph});
+      // Fusion rectangles adjacents
+      for(let a=0;a<this.free.length;a++){
+        for(let b=a+1;b<this.free.length;b++){
+          const A=this.free[a],B=this.free[b];
+          if(A.y===B.y&&A.h===B.h&&A.x+A.w===B.x){A.w+=B.w;this.free.splice(b,1);b--;}
+          else if(A.x===B.x&&A.w===B.w&&A.y+A.h===B.y){A.h+=B.h;this.free.splice(b,1);b--;}
+        }
+      }
+      return{x,y,width:pw,height:ph,rot};
+    }
+  };
+}
+
+function maxRectsPack(items,W,H,kerf){
+  const k=Math.max(0,kerf||0);
+  const bins=[]; let queue=[...items];
+
+  while(queue.length>0){
+    queue.sort((a,b)=>b.w*b.h-a.w*a.h); // trier par aire décroissante
+    const packer=mkPacker(W,H);
+    const bin={width:W,height:H,rects:[],usedArea:0};
+    const remaining=[]; let cnt=0;
+
+    for(const it of queue){
+      const placed=packer.place(it.w+k,it.h+k,it.allowRotation);
+      if(placed){
+        bin.rects.push({x:placed.x,y:placed.y,width:placed.width,height:placed.height,
+          meta:{id:it.id,name:it.name,originalW:it.origW,originalH:it.origH,rotated:placed.rot}});
+        bin.usedArea+=it.origW*it.origH; cnt++;
+      } else remaining.push(it);
+    }
+
+    if(cnt>0){
+      bins.push(bin); queue=remaining;
+    } else {
+      // Aucune pièce placée : forcer la première dans son propre bin et continuer
+      const it=queue.shift();
+      const nb={width:W,height:H,rects:[],usedArea:0};
+      nb.rects.push({x:0,y:0,width:Math.min(it.w+k,W),height:Math.min(it.h+k,H),
+        meta:{id:it.id,name:it.name,originalW:it.origW,originalH:it.origH,rotated:false}});
+      nb.usedArea+=it.origW*it.origH; bins.push(nb);
+      // queue contient encore les pièces restantes → la boucle while continue
+    }
+  }
+  return bins;
+}
+
+// ── Build items & validation ──────────────────────────────────────────────────
+function buildItems(){
+  const arr=[];
+  for(const p of S.pieces){
+    for(let i=0;i<p.qty;i++){
+      const w=+p.w||0,h=p.isSquare?w:+p.h||0;
+      arr.push({id:p.id,name:p.name||'Pièce',w,h,origW:w,origH:h,allowRotation:p.isSquare?false:!!p.allowRotation});
+    }
+  }
+  return arr;
+}
+
+function validate(){
+  const errs=[];
+  Array.from(piecesContainer.children).forEach((n,i)=>{
+    const sq=n.querySelector('.sq').checked;
+    const pw=n.querySelector('.pw'),ph=n.querySelector('.ph');
+    pw.classList.remove('invalid'); ph.classList.remove('invalid');
+    if(!pw.value||+pw.value<=0){errs.push(`Pièce #${i+1} : Longueur requise (> 0)`);pw.classList.add('invalid');}
+    if(!sq&&(!ph.value||+ph.value<=0)){errs.push(`Pièce #${i+1} : Largeur requise (> 0)`);ph.classList.add('invalid');}
+  });
+  return errs;
+}
+
+// ── Stats globales ────────────────────────────────────────────────────────────
+function totalStats(bins,W,H){
+  const sheetArea=bins.length*W*H;
+  const used=bins.reduce((s,b)=>s+b.usedArea,0);
+  const waste=Math.max(0,sheetArea-used);
+  const pct=sheetArea>0?Math.round(used/sheetArea*1000)/10:0;
+  return{sheets:bins.length,used,waste,pct,sheetArea};
+}
+
+// ── Calcul ────────────────────────────────────────────────────────────────────
+function compute(){
+  save();
+  const errs=validate();
+  if(errs.length){
+    qs('#validationMsg').innerHTML=errs.map(e=>esc(e)).join('<br>');
+    qs('#validationModal').classList.add('active'); qs('#validationOk').focus();
+    document.querySelector('.invalid')?.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+  const items=buildItems();
+  if(!items.length){alert('Aucune pièce à placer.');return;}
+  const W=S.orientation==='landscape'?S.paper.h:S.paper.w;
+  const H=S.orientation==='landscape'?S.paper.w:S.paper.h;
+  const k=S.kerf||0;
+
+  const shBins=shelfPack(items,W,H,k);
+  const mrBins=maxRectsPack(items,W,H,k);
+  const shSt=totalStats(shBins,W,H), mrSt=totalStats(mrBins,W,H);
+
+  // Recommander : moins de feuilles, puis meilleur rendement
+  const shWin=shSt.sheets<mrSt.sheets||(shSt.sheets===mrSt.sheets&&shSt.pct>=mrSt.pct);
+  const mrWin=!shWin;
+
+  S.results={
+    shelf:{bins:shBins,stats:shSt,isWinner:shWin,label:'Solution 1'},
+    maxrects:{bins:mrBins,stats:mrSt,isWinner:mrWin,label:'Solution 2'}
+  };
+  Object.keys(S.results).forEach(k=>{S.curSheet[k]=0;if(S.zoom[k]==null)S.zoom[k]=1;});
+  render();
+}
+
+// ── Rendu SVG d'un bin ────────────────────────────────────────────────────────
+function renderBin(svgEl,b,zoom){
+  while(svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+  const ns='http://www.w3.org/2000/svg', k=S.kerf||0;
+  // Fond
+  const bg=document.createElementNS(ns,'rect');
+  bg.setAttribute('x',0);bg.setAttribute('y',0);bg.setAttribute('width',b.width);bg.setAttribute('height',b.height);
+  bg.setAttribute('fill','#fff');bg.setAttribute('stroke','#94a3b8');bg.setAttribute('stroke-width',0.6);
+  svgEl.appendChild(bg);
+
+  for(const r of b.rects){
+    const m=r.meta||{}, color=pieceColor(m.id||m.name||'?');
+    const kh=k/2;
+    const iw=m.rotated?m.originalH:m.originalW, ih=m.rotated?m.originalW:m.originalH;
+    const ix=r.x+kh, iy=r.y+kh;
+
+    // Zone kerf (pointillés)
+    if(k>0.1){
+      const oz=document.createElementNS(ns,'rect');
+      oz.setAttribute('x',r.x);oz.setAttribute('y',r.y);oz.setAttribute('width',r.width);oz.setAttribute('height',r.height);
+      oz.setAttribute('fill',lighten(color,.93));oz.setAttribute('stroke',lighten(color,.6));
+      oz.setAttribute('stroke-width',.3);oz.setAttribute('stroke-dasharray','1.5 1');
+      svgEl.appendChild(oz);
+    }
+    // Pièce
+    const rect=document.createElementNS(ns,'rect');
+    rect.setAttribute('x',ix);rect.setAttribute('y',iy);rect.setAttribute('width',iw);rect.setAttribute('height',ih);
+    rect.setAttribute('fill',lighten(color,.72));rect.setAttribute('stroke',color);rect.setAttribute('stroke-width',.5);
+    svgEl.appendChild(rect);
+
+    const fs=Math.min(5,Math.max(2.5,Math.min(iw,ih)*.14));
+    // Label
+    const txt=document.createElementNS(ns,'text');
+    txt.setAttribute('x',ix+1.5);txt.setAttribute('y',iy+fs+1);txt.setAttribute('font-size',fs);txt.setAttribute('fill','#1e3a5f');
+    txt.textContent=(m.name?m.name+' ':'')+m.originalW+'×'+m.originalH+(m.rotated?' ↺':'');
+    svgEl.appendChild(txt);
+  }
+  svgEl.setAttribute('viewBox',`0 0 ${b.width} ${b.height}`);
+}
+
+// ── Rendu résultats ───────────────────────────────────────────────────────────
+function render(){
+  resultsArea.innerHTML='';
+  const keys=Object.keys(S.results||{});
+  if(!keys.length){resultsArea.innerHTML='<div class="help-block">Aucun calcul. Ajoutez des pièces et cliquez sur « ▶ Calculer l\'optimisation ».</div>';return;}
+
+  // Légende des pièces
+  if(S.pieces?.length){
+    const legendHTML=S.pieces.map(p=>{
+      const c=pieceColor(p.id), nm=esc(p.name||'Pièce');
+      const sz=p.isSquare?`${p.w}×${p.w}`:`${p.w}×${p.h}`;
+      return`<div class="legend-item"><div class="legend-swatch" style="background:${c};"></div>${nm} <span style="color:var(--muted)">${sz} mm${p.qty>1?` ×${p.qty}`:''}</span></div>`;
+    }).join('');
+    const ld=document.createElement('div');
+    ld.innerHTML=`<div class="section-title" style="margin-bottom:4px;">Légende des pièces</div><div class="legend">${legendHTML}</div>`;
+    ld.style.marginBottom='14px';
+    resultsArea.appendChild(ld);
+  }
+
+  keys.forEach(key=>{
+    const res=S.results[key], bins=res.bins, st=res.stats;
+    const idx=Math.min(S.curSheet[key]||0,Math.max(0,bins.length-1));
+    if(S.zoom[key]==null) S.zoom[key]=1;
+
+    const card=document.createElement('div'); card.className='result-card';
+    if(res.isWinner) card.style.borderTop=`3px solid var(--success)`;
+
+    // En-tête
+    const hd=document.createElement('div');
+    hd.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+    hd.innerHTML=`<strong style="font-size:15px;">${esc(res.label)}</strong><span style="color:var(--muted);font-size:14px;"> / ${st.sheets} feuille${st.sheets>1?'s':''}</span>`;
+    card.appendChild(hd);
+
+    // Métriques globales
+    const mb=document.createElement('div'); mb.className='metrics-bar';
+    mb.innerHTML=`
+      <div class="metric-item"><div class="m-label">Feuilles nécessaires</div><div class="m-value">${st.sheets}</div></div>`;
+    card.appendChild(mb);
+
+    // Pages row
+    const pr=document.createElement('div'); pr.className='pages-row';
+    const mv=document.createElement('div'); mv.className='main-view';
+    const mainSvg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    mainSvg.setAttribute('preserveAspectRatio','xMidYMid meet');
+    mainSvg.style.cssText='width:100%;height:460px;border-radius:6px;border:1px solid var(--border);display:block;';
+    mv.appendChild(mainSvg); pr.appendChild(mv);
+
+    const tc=document.createElement('div'); tc.className='thumbs-col';
+    pr.appendChild(tc); card.appendChild(pr);
+
+    // Contrôles
+    const cr=document.createElement('div'); cr.className='ctrl-row';
+    const prev=document.createElement('button'); prev.className='btn ghost'; prev.textContent='← Préc.';
+    const pgSpan=document.createElement('span'); pgSpan.className='meta-info';
+    const next=document.createElement('button'); next.className='btn ghost'; next.textContent='Suiv. →';
+    const expBtn=document.createElement('button'); expBtn.className='btn ghost'; expBtn.textContent='⤓ SVG';
+    [prev,pgSpan,next,expBtn].forEach(e=>cr.appendChild(e));
+    card.appendChild(cr);
+    resultsArea.appendChild(card);
+
+    // Miniatures
+    const thumbEls=[];
+    bins.forEach((b,i)=>{
+      const wrap=document.createElement('div'); wrap.className='thumb-wrap';
+      const thumb=document.createElement('div'); thumb.className='thumb';
+      const tsvg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      tsvg.setAttribute('preserveAspectRatio','xMidYMid meet');
+      tsvg.setAttribute('viewBox',`0 0 ${b.width} ${b.height}`);
+      tsvg.style.cssText='width:100%;height:100%;';
+      thumb.appendChild(tsvg); renderBin(tsvg,b,1);
+      const lbl=document.createElement('div'); lbl.style.cssText='font-size:10px;color:var(--muted);';
+      lbl.textContent=`Feuille ${i+1}`;
+      wrap.appendChild(thumb); wrap.appendChild(lbl); tc.appendChild(wrap);
+      thumbEls.push(thumb);
+      thumb.addEventListener('click',()=>selectSheet(i));
+    });
+
+    function selectSheet(i){
+      S.curSheet[key]=i;
+      renderBin(mainSvg,bins[i],S.zoom[key]);
+      thumbEls.forEach(t=>t.classList.remove('selected'));
+      thumbEls[i]?.classList.add('selected');
+      thumbEls[i]?.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
+      pgSpan.textContent=`${i+1} / ${bins.length}`;
+    }
+
+    if(bins.length){selectSheet(idx);}
+
+    prev.addEventListener('click',()=>selectSheet(Math.max(0,(S.curSheet[key]||0)-1)));
+    next.addEventListener('click',()=>selectSheet(Math.min(bins.length-1,(S.curSheet[key]||0)+1)));
+
+
+
+    expBtn.addEventListener('click',()=>{
+      const i=S.curSheet[key]||0, b=bins[i]; if(!b) return;
+      const ns='http://www.w3.org/2000/svg', k=S.kerf||0;
+      const svg=document.createElementNS(ns,'svg');
+      svg.setAttribute('xmlns',ns);svg.setAttribute('width',b.width+'mm');svg.setAttribute('height',b.height+'mm');
+      svg.setAttribute('viewBox',`0 0 ${b.width} ${b.height}`);
+      const bg=document.createElementNS(ns,'rect');bg.setAttribute('x',0);bg.setAttribute('y',0);
+      bg.setAttribute('width',b.width);bg.setAttribute('height',b.height);bg.setAttribute('fill','#fff');svg.appendChild(bg);
+      b.rects.forEach(r=>{
+        const m=r.meta||{}, color=pieceColor(m.id||m.name||'?');
+        const kh=k/2, iw=m.rotated?m.originalH:m.originalW, ih=m.rotated?m.originalW:m.originalH;
+        const rc=document.createElementNS(ns,'rect');
+        rc.setAttribute('x',r.x+kh);rc.setAttribute('y',r.y+kh);rc.setAttribute('width',iw);rc.setAttribute('height',ih);
+        rc.setAttribute('fill',lighten(color,.72));rc.setAttribute('stroke',color);rc.setAttribute('stroke-width',.5);
+        svg.appendChild(rc);
+        const t=document.createElementNS(ns,'text');
+        t.setAttribute('x',r.x+kh+1.5);t.setAttribute('y',r.y+kh+5);t.setAttribute('font-size',4);t.setAttribute('fill','#1e3a5f');
+        t.textContent=(m.name?m.name+' ':'')+m.originalW+'×'+m.originalH+(m.rotated?' ↺':'');
+        svg.appendChild(t);
+      });
+      dl(`decoupe_${key}_f${i+1}.svg`,'<?xml version="1.0" encoding="UTF-8"?>\n'+new XMLSerializer().serializeToString(svg));
+    });
+  });
+}
+
+// ── Save / Load ───────────────────────────────────────────────────────────────
+qs('#saveBtn').addEventListener('click',()=>{
+  save(); const nm=prompt('Nom du projet :','Projet');if(!nm)return;
+  const all=JSON.parse(localStorage.getItem('copt_saves')||'{}');
+  all[nm]={meta:{nm,date:new Date().toISOString()},S};
+  localStorage.setItem('copt_saves',JSON.stringify(all));
+  alert('Projet sauvegardé.');
+});
+qs('#loadBtn').addEventListener('click',()=>{
+  const all=JSON.parse(localStorage.getItem('copt_saves')||'{}'), nms=Object.keys(all);
+  if(!nms.length){alert('Aucune sauvegarde.');return;}
+  const ch=prompt('Projet à charger :\n'+nms.join('\n'));if(!ch||!all[ch])return;
+  S=all[ch].S;
+  kerfInput.value=S.kerf;
+  const pn=S.paper.name;
+  paperSel.value=pn==='A4'?'A4':pn==='A3'?'A3':(pn==='SQR'||pn==='305x305')?'SQR':'CUSTOM';
+  if(paperSel.value==='CUSTOM'){custInputs.style.display='flex';custW.value=S.paper.w;custH.value=S.paper.h;}
+  else custInputs.style.display='none';
+  orientSel.value=S.orientation;
+  loadRows(); render();
+  alert('Projet chargé.');
+});
+
+// ── Confirmations ─────────────────────────────────────────────────────────────
+qs('#confirmCancel').addEventListener('click',()=>{pendingDel=null;qs('#confirmModal').classList.remove('active');});
+qs('#confirmModal').addEventListener('click',e=>{if(e.target===qs('#confirmModal')){pendingDel=null;qs('#confirmModal').classList.remove('active');}});
+qs('#confirmYes').addEventListener('click',()=>{pendingDel?.remove();pendingDel=null;save();qs('#confirmModal').classList.remove('active');});
+qs('#clearCancel').addEventListener('click',()=>qs('#confirmClearModal').classList.remove('active'));
+qs('#confirmClearModal').addEventListener('click',e=>{if(e.target===qs('#confirmClearModal'))qs('#confirmClearModal').classList.remove('active');});
+qs('#clearYes').addEventListener('click',()=>{piecesContainer.innerHTML='';save();qs('#confirmClearModal').classList.remove('active');});
+qs('#validationOk').addEventListener('click',()=>qs('#validationModal').classList.remove('active'));
+
+// ── Câblage ────────────────────────────────────────────────────────────────────
+qs('#addFormBtn').addEventListener('click',()=>{mkRow();save();});
+qs('#clearFormsBtn').addEventListener('click',()=>{qs('#confirmClearModal').classList.add('active');qs('#clearCancel').focus();});
+qs('#calcBtn').addEventListener('click',compute);
+qs('#clearLayoutBtn').addEventListener('click',()=>{S.results={};S.curSheet={};render();});
+qs('#globalZoomFit').addEventListener('click',()=>{Object.keys(S.zoom).forEach(k=>S.zoom[k]=1);render();});
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+paperSel.dispatchEvent(new Event('change'));
+try{const t=localStorage.getItem('copt_tmp');if(t){const d=JSON.parse(t);S.pieces=d.pieces||[];}}catch(e){}
+loadRows(); render();
+</script>
+</body>
+</html>
