@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>DecoupScrap</title>
+<style>
+:root{--bg:#f5f7fa;--card:#fff;--primary:#0A66C2;--muted:#6b7280;--danger:#e02424;--success:#059669;--border:#e6eef8;}
+*{box-sizing:border-box;}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);color:#111;}
+
+header{height:52px;background:var(--primary);color:#fff;display:flex;align-items:center;padding:0 14px;flex-shrink:0;}
+header strong{font-size:16px;}
+.container{display:flex;height:calc(100vh - 52px);}
+.sidebar{width:400px;min-width:260px;background:var(--card);padding:14px;box-shadow:1px 0 0 rgba(0,0,0,.06);overflow-y:auto;display:flex;flex-direction:column;flex-shrink:0;}
+.main{flex:1;display:flex;flex-direction:column;gap:10px;padding:12px;overflow-y:auto;}
+
+.section-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:12px 0 6px;}
+.section-title:first-child{margin-top:0;}
+.btn{background:var(--primary);color:#fff;border:none;padding:9px 14px;border-radius:8px;cursor:pointer;font-size:14px;min-height:42px;touch-action:manipulation;}
+.btn.ghost{background:transparent;color:var(--primary);border:1px solid rgba(10,102,194,.3);}
+.btn:active{opacity:.8;}
+.meta-info{font-size:12px;color:var(--muted);}
+
+.piece-row{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;padding:10px 10px 10px 13px;background:#fbfdff;border-radius:8px;border:1px solid #eef2f7;transition:border-color .15s;}
+.piece-row.empty-slot{border-style:dashed;border-color:#c7d9f5;background:#f4f8ff;}
+.piece-row-top{display:flex;gap:8px;align-items:center;}
+.piece-dims{display:flex;gap:8px;align-items:flex-end;}
+.field-cell{display:flex;flex-direction:column;gap:3px;}
+.field-cell .lab{font-size:11px;color:var(--muted);white-space:nowrap;}
+.field-cell input[type=number]{width:90px;padding:8px;border-radius:6px;border:1px solid #dbeafe;font-size:14px;}
+.field-cell.sm input[type=number]{width:64px;}
+.piece-actions{display:flex;justify-content:space-between;align-items:center;}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:7px;background:transparent;cursor:pointer;touch-action:manipulation;}
+.icon-btn.del{border:1px solid rgba(224,36,36,.2);color:var(--danger);}
+.icon-btn.dup{border:1px solid rgba(5,150,105,.2);color:var(--success);}
+.icon-btn svg{width:16px;height:16px;fill:currentColor;}
+input[disabled]{background:#f3f4f6;color:var(--muted);cursor:not-allowed;}
+.invalid{border-color:var(--danger)!important;box-shadow:0 0 0 2px rgba(224,36,36,.1);}
+select{padding:8px 10px;border-radius:6px;border:1px solid #dbeafe;font-size:14px;background:#fff;min-height:40px;}
+.help-block{font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px;}
+.sidebar-actions{margin-top:auto;padding-top:14px;display:flex;gap:8px;}
+
+/* Légende */
+.legend{display:flex;flex-wrap:wrap;gap:8px;padding:8px 10px;background:#f8fbff;border-radius:6px;border:1px solid var(--border);margin-top:6px;margin-bottom:14px;}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:12px;}
+.legend-swatch{width:11px;height:11px;border-radius:2px;flex-shrink:0;}
+
+/* Pagination solutions */
+.sol-nav{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.sol-nav strong{font-size:15px;}
+.sol-nav .sol-count{font-size:14px;color:var(--muted);}
+
+/* Feuilles empilées */
+.sheet-block{background:#fff;border-radius:10px;border:1px solid var(--border);box-shadow:0 4px 16px rgba(2,6,23,.04);margin-bottom:12px;overflow:hidden;}
+.sheet-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--border);background:#f8fbff;}
+.sheet-header span{font-size:13px;font-weight:600;color:#0a4a90;}
+.sheet-svg{width:100%;display:block;}
+
+/* Modal */
+.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.4);z-index:50;padding:16px;}
+.modal.active{display:flex;}
+.modal .card{background:#fff;padding:20px;border-radius:12px;width:100%;max-width:440px;}
+.modal .card h3{margin:0 0 10px;font-size:16px;}
+.error-list{color:var(--danger);font-size:13px;line-height:1.6;}
+
+/* Tab bar mobile */
+.tab-bar{display:none;position:fixed;bottom:0;left:0;right:0;height:56px;background:#fff;border-top:1px solid var(--border);z-index:40;box-shadow:0 -2px 10px rgba(0,0,0,.07);}
+.tab-btn{flex:1;border:none;background:transparent;color:var(--muted);font-size:12px;font-weight:500;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px;touch-action:manipulation;}
+.tab-btn.active{color:var(--primary);}
+.tab-icon{font-size:22px;line-height:1;}
+
+@media(max-width:768px){
+  body{padding-bottom:56px;}
+  .tab-bar{display:flex;}
+  .container{flex-direction:column;height:auto;min-height:calc(100vh - 52px - 56px);}
+  .sidebar{width:100%;min-width:unset;box-shadow:none;border-bottom:1px solid var(--border);overflow-y:visible;padding-bottom:72px;}
+  .main{padding:10px;padding-bottom:72px;}
+  .panel-hidden{display:none!important;}
+  .field-cell input[type=number]{padding:9px;font-size:15px;width:100%;}
+  .field-cell{flex:1;}
+  .piece-dims{flex-wrap:wrap;gap:6px;}
+  select{width:100%;}
+  .btn{min-height:46px;font-size:15px;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:18px;margin-right:8px;">✂️</span>
+  <strong>DecoupScrap</strong>
+</header>
+
+<div class="container">
+<aside class="sidebar" id="panelConfig">
+  <div class="section-title">Format papier</div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <select id="paperSelect" style="flex:1;">
+      <option value="A4">A4 — 210 × 297 mm</option>
+      <option value="A3">A3 — 297 × 420 mm</option>
+      <option value="SQR">305 × 305 mm (scrap)</option>
+      <option value="CUSTOM">Personnalisé…</option>
+    </select>
+    <select id="orientation" style="flex:1;">
+      <option value="portrait">Portrait</option>
+      <option value="landscape">Paysage</option>
+    </select>
+  </div>
+  <div id="customPaperInputs" style="display:none;margin-top:8px;gap:8px;">
+    <div class="field-cell"><div class="lab">Largeur (mm)</div><input id="customW" type="number" value="210"></div>
+    <div class="field-cell"><div class="lab">Hauteur (mm)</div><input id="customH" type="number" value="297"></div>
+  </div>
+
+  <div class="section-title">Kerf</div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <div class="field-cell" style="flex:0 0 auto;"><input id="kerf" type="number" value="0" step="0.1" style="width:80px;padding:8px;border:1px solid #dbeafe;border-radius:6px;font-size:14px;"></div>
+    <span class="meta-info">mm d'espace entre les pièces</span>
+  </div>
+
+  <div class="section-title" style="margin-top:14px;">Pièces à découper
+    <button class="btn ghost" id="clearFormsBtn" style="float:right;min-height:26px;padding:3px 10px;font-size:12px;margin-top:-3px;">Tout effacer</button>
+  </div>
+  <div id="piecesContainer"></div>
+  <div class="help-block">Dimensions en mm. « Carré » verrouille la largeur. La rotation est activée par défaut.</div>
+
+  <div class="sidebar-actions">
+    <button class="btn" id="calcBtn" style="flex:1;">▶ Calculer l'optimisation</button>
+    <button class="btn ghost" id="clearLayoutBtn">Réinitialiser</button>
+  </div>
+</aside>
+
+<main class="main" id="panelResults">
+  <div id="resultsArea"></div>
+</main>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" id="tabConfig"><span class="tab-icon">📋</span>Pièces</button>
+  <button class="tab-btn" id="tabResults"><span class="tab-icon">📐</span>Résultats</button>
+</div>
+
+<!-- Modals -->
+<div id="confirmModal" class="modal"><div class="card">
+  <h3>Supprimer cette pièce ?</h3><p style="font-size:13px;color:var(--muted);">Cette action est définitive.</p>
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+    <button id="confirmCancel" class="btn ghost">Annuler</button>
+    <button id="confirmYes" class="btn" style="background:var(--danger)">Supprimer</button>
+  </div>
+</div></div>
+<div id="confirmClearModal" class="modal"><div class="card">
+  <h3>Effacer toutes les pièces ?</h3>
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+    <button id="clearCancel" class="btn ghost">Annuler</button>
+    <button id="clearYes" class="btn" style="background:var(--danger)">Effacer tout</button>
+  </div>
+</div></div>
+<div id="validationModal" class="modal"><div class="card">
+  <h3>Erreurs de saisie</h3>
+  <div id="validationMsg" class="error-list"></div>
+  <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+    <button id="validationOk" class="btn">OK, corriger</button>
+  </div>
+</div></div>
+
+<script>
+'use strict';
+
+const PALETTE=['#4e79a7','#e8682a','#e15759','#3aa76d','#b07aa1','#9c755f','#499894','#d4a017','#7b4f9e','#d37295','#59a14f','#1787c4','#f28e2b','#76b7b2','#ff9da7','#bab0ac','#8cd17d','#b6992d','#86bcb6','#e49444','#d4a6c8','#2ca02c','#ff7f0e','#1f77b4','#9467bd','#c5b0d5','#c49c94','#17becf','#bcbd22','#7f7f7f'];
+function strHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))&0x7fffffff;return h;}
+let colorMap={};
+function assignColors(pieces){colorMap={};pieces.forEach((p,i)=>colorMap[p.id]=PALETTE[i%PALETTE.length]);}
+function pieceColor(id){return colorMap[id]||PALETTE[strHash(String(id))%PALETTE.length];}
+function lighten(hex,t){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgb(${Math.round(r+(255-r)*t)},${Math.round(g+(255-g)*t)},${Math.round(b+(255-b)*t)})`;}
+
+const qs=s=>document.querySelector(s);
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);}
+function dl(name,content){const b=new Blob([content],{type:'image/svg+xml'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);}
+function isMobile(){return window.innerWidth<=768;}
+
+let S={paper:{w:210,h:297,name:'A4'},orientation:'portrait',kerf:0,pieces:[],results:[],curSol:0};
+const piecesContainer=qs('#piecesContainer');
+const paperSel=qs('#paperSelect'),custInputs=qs('#customPaperInputs'),custW=qs('#customW'),custH=qs('#customH');
+const orientSel=qs('#orientation'),kerfInput=qs('#kerf');
+const resultsArea=qs('#resultsArea');
+let pendingDel=null;
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(tab){
+  qs('#tabConfig').classList.toggle('active',tab==='config');
+  qs('#tabResults').classList.toggle('active',tab==='results');
+  if(isMobile()){
+    qs('#panelConfig').classList.toggle('panel-hidden',tab!=='config');
+    qs('#panelResults').classList.toggle('panel-hidden',tab!=='results');
+  }
+}
+qs('#tabConfig').addEventListener('click',()=>switchTab('config'));
+qs('#tabResults').addEventListener('click',()=>switchTab('results'));
+window.addEventListener('resize',()=>{if(!isMobile()){qs('#panelConfig').classList.remove('panel-hidden');qs('#panelResults').classList.remove('panel-hidden');}});
+
+// ── Pièce vide ? ──────────────────────────────────────────────────────────────
+function isRowEmpty(n){
+  const nm=n.querySelector('.pname').value.trim();
+  const w=n.querySelector('.pw').value;
+  const h=n.querySelector('.ph').value;
+  return nm===''&&(w===''||+w===0)&&(h===''||+h===0);
+}
+function enforcePositiveNumber(input){
+  input.addEventListener('keydown',e=>{
+    // Autoriser : chiffres, pavé num, backspace, delete, tab, entrée, flèches, point/virgule décimale
+    const ok=[8,9,13,27,35,36,37,38,39,40,46,110,190,188];
+    if(ok.includes(e.keyCode)) return;
+    if(e.ctrlKey||e.metaKey) return; // Ctrl+A, Ctrl+C…
+    if(e.keyCode>=96&&e.keyCode<=105) return; // pavé numérique
+    if(e.keyCode>=48&&e.keyCode<=57) return;  // chiffres rangée du haut
+    e.preventDefault();
+  });
+}
+
+let _ensuring=false;
+function ensureEmptyRow(){
+  if(_ensuring)return;
+  _ensuring=true;
+  Array.from(piecesContainer.children).filter(isRowEmpty).forEach(n=>n.remove());
+  mkRow();
+  _ensuring=false;
+}
+
+// ── Formulaire pièce ──────────────────────────────────────────────────────────
+function mkRow(p=null){
+  const id=p?.id||('f'+Math.random().toString(36).slice(2,8));
+  const isSquare=!!(p?.isSquare),rot=p?.allowRotation??true,color=pieceColor(id);
+  const el=document.createElement('div');el.className='piece-row';el.dataset.id=id;
+  // Bordure colorée seulement si la pièce a un contenu
+  const isEmpty=!p||(!p.name&&!p.w&&!p.h);
+  if(!isEmpty) el.style.borderLeft=`3px solid ${color}`;
+  else el.classList.add('empty-slot');
+
+  el.innerHTML=`
+    <div class="piece-row-top">
+      <input class="pname" placeholder="Nom (optionnel)" value="${esc(p?.name||'')}" style="flex:1;padding:8px;border:1px solid #dbeafe;border-radius:6px;font-size:14px;">
+      <label style="display:flex;gap:5px;align-items:center;font-size:14px;cursor:pointer;white-space:nowrap;margin-left:6px;"><input type="checkbox" class="sq" ${isSquare?'checked':''}> Carré</label>
+    </div>
+    <div class="piece-dims">
+      <div class="field-cell"><div class="lab">Longueur (mm)</div><input class="pw" type="number" step="0.1" value="${p?.w||''}"></div>
+      <div class="field-cell"><div class="lab">Largeur (mm)</div><input class="ph" type="number" step="0.1" value="${p?.h||''}"></div>
+      <div class="field-cell sm"><div class="lab">Qté</div><input class="pq" type="number" min="1" value="${p?.qty||1}"></div>
+    </div>
+    <div class="piece-actions">
+      <label style="display:flex;gap:5px;align-items:center;font-size:13px;cursor:pointer;"><input class="pr" type="checkbox" ${rot?'checked':''}> Rotation 90° auto.</label>
+      <div style="display:flex;gap:6px;">
+        <button class="icon-btn dup" title="Dupliquer"><svg viewBox="0 0 24 24"><path d="M8 7h9v11H8zM5 4h9v2H5z"/></svg></button>
+        <button class="icon-btn del" title="Supprimer"><svg viewBox="0 0 24 24"><path d="M3 6h18v2H3V6zm2 3h14l-1.2 11.2c-.1.9-.9 1.8-1.9 1.8H8.1c-1 0-1.8-.9-1.9-1.8L5 9zM9 4V3c0-.6.4-1 1-1h4c.6 0 1 .4 1 1v1h5v2H4V4h5z"/></svg></button>
+      </div>
+    </div>`;
+  piecesContainer.appendChild(el);
+
+  const nm=el.querySelector('.pname'),sq=el.querySelector('.sq');
+  const pw=el.querySelector('.pw'),ph=el.querySelector('.ph'),pq=el.querySelector('.pq'),pr=el.querySelector('.pr');
+
+  enforcePositiveNumber(pw);
+  enforcePositiveNumber(ph);
+
+  function applySquare(v,skipSave=false){if(v){ph.value=pw.value;ph.disabled=true;pr.checked=false;pr.disabled=true;}else{ph.disabled=false;pr.disabled=false;}if(!skipSave)onInput();}
+  function refreshSlotStyle(){
+    if(isRowEmpty(el)){el.classList.add('empty-slot');el.style.borderLeft='';}
+    else{el.classList.remove('empty-slot');el.style.borderLeft=`3px solid ${color}`;}
+  }
+  function onInput(){refreshSlotStyle();save();}
+
+  sq.addEventListener('change',e=>applySquare(e.target.checked));
+  pw.addEventListener('input',()=>{if(sq.checked)ph.value=pw.value;onInput();});
+  [ph,pq,nm,pr].forEach(i=>i.addEventListener('input',onInput));
+
+  el.querySelector('.dup').addEventListener('click',()=>{
+    mkRow({id:'f'+Math.random().toString(36).slice(2,8),name:nm.value,w:+pw.value||0,h:+ph.value||0,qty:+pq.value||1,isSquare:sq.checked,allowRotation:pr.checked});
+    save();
+  });
+  el.querySelector('.del').addEventListener('click',()=>{pendingDel=el;qs('#confirmModal').classList.add('active');qs('#confirmCancel').focus();});
+
+  applySquare(isSquare, true);
+}
+
+function save(){
+  S.pieces=Array.from(piecesContainer.children)
+    .filter(n=>!isRowEmpty(n))
+    .map(n=>({
+      id:n.dataset.id,name:n.querySelector('.pname').value||'',isSquare:!!n.querySelector('.sq').checked,
+      w:+n.querySelector('.pw').value||0,h:+n.querySelector('.ph').value||0,
+      qty:Math.max(1,+n.querySelector('.pq').value||1),
+      allowRotation:n.querySelector('.sq').checked?false:!!n.querySelector('.pr').checked
+    }));
+  ensureEmptyRow();
+}
+
+function loadRows(){
+  piecesContainer.innerHTML='';
+  (S.pieces||[]).forEach(p=>mkRow(p));
+  ensureEmptyRow();
+}
+
+// ── Paper UI ──────────────────────────────────────────────────────────────────
+paperSel.addEventListener('change',()=>{
+  const v=paperSel.value,pre={A4:{w:210,h:297},A3:{w:297,h:420},SQR:{w:305,h:305}};
+  if(pre[v]){S.paper={...pre[v],name:v};custInputs.style.display='none';}
+  else{custInputs.style.display='flex';S.paper={w:+custW.value||210,h:+custH.value||297,name:'custom'};}
+});
+custW.addEventListener('change',()=>S.paper.w=+custW.value||210);
+custH.addEventListener('change',()=>S.paper.h=+custH.value||297);
+orientSel.addEventListener('change',()=>S.orientation=orientSel.value);
+kerfInput.addEventListener('change',()=>S.kerf=+kerfInput.value||0);
+
+// ── Algorithmes ───────────────────────────────────────────────────────────────
+function shelfPack(items,W,H,kerf){
+  const k=Math.max(0,kerf||0),sorted=[...items].sort((a,b)=>b.h-a.h);
+  const bins=[],newBin=()=>({width:W,height:H,rects:[],rows:[],usedArea:0});
+  bins.push(newBin());
+  for(const it of sorted){
+    const sizes=[{w:it.w+k,h:it.h+k,rot:false}];
+    if(it.allowRotation&&it.w!==it.h)sizes.push({w:it.h+k,h:it.w+k,rot:true});
+    let placed=false;
+    for(const bin of bins){
+      for(const s of sizes){
+        if(s.w>bin.width||s.h>bin.height)continue;
+        for(const row of bin.rows){
+          if(row.x+s.w<=bin.width&&s.h<=row.height){
+            bin.rects.push({x:row.x,y:row.y,width:s.w,height:s.h,meta:{id:it.id,name:it.name,originalW:it.origW,originalH:it.origH,rotated:s.rot}});
+            bin.usedArea+=it.origW*it.origH;row.x+=s.w;placed=true;break;
+          }
+        }
+        if(placed)break;
+        const usedH=bin.rows.reduce((a,r)=>Math.max(a,r.y+r.height),0);
+        if(usedH+s.h<=bin.height){
+          const row={x:s.w,y:usedH,height:s.h};bin.rows.push(row);
+          bin.rects.push({x:0,y:row.y,width:s.w,height:s.h,meta:{id:it.id,name:it.name,originalW:it.origW,originalH:it.origH,rotated:s.rot}});
+          bin.usedArea+=it.origW*it.origH;placed=true;break;
+        }
+      }
+      if(placed)break;
+    }
+    if(!placed){
+      const nb=newBin();
+      const s=sizes.find(s=>s.w<=W&&s.h<=H)||{w:Math.min(sizes[0].w,W),h:Math.min(sizes[0].h,H),rot:false};
+      nb.rows.push({x:s.w,y:0,height:s.h});
+      nb.rects.push({x:0,y:0,width:s.w,height:s.h,meta:{id:it.id,name:it.name,originalW:it.origW,originalH:it.origH,rotated:s.rot}});
+      nb.usedArea+=it.origW*it.origH;bins.push(nb);
+    }
+  }
+  return bins;
+}
+function mkPacker(W,H){
+  return{free:[{x:0,y:0,w:W,h:H}],
+    place(w,h,canRot){
+      let best=null;
+      const cands=[{w,h,rot:false}];if(canRot&&w!==h)cands.push({w:h,h:w,rot:true});
+      for(const c of cands)for(const fr of this.free)if(c.w<=fr.w&&c.h<=fr.h){const sc=Math.min(fr.w-c.w,fr.h-c.h)*100000+Math.max(fr.w-c.w,fr.h-c.h);if(!best||sc<best.score)best={score:sc,fr,x:fr.x,y:fr.y,w:c.w,h:c.h,rot:c.rot};}
+      if(!best)return null;
+      const{fr,x,y,w:pw,h:ph,rot}=best;
+      const i=this.free.indexOf(fr);if(i>=0)this.free.splice(i,1);
+      if(fr.w-pw>0)this.free.push({x:fr.x+pw,y:fr.y,w:fr.w-pw,h:ph});
+      if(fr.h-ph>0)this.free.push({x:fr.x,y:fr.y+ph,w:fr.w,h:fr.h-ph});
+      for(let a=0;a<this.free.length;a++)for(let b=a+1;b<this.free.length;b++){const A=this.free[a],B=this.free[b];if(A.y===B.y&&A.h===B.h&&A.x+A.w===B.x){A.w+=B.w;this.free.splice(b,1);b--;}else if(A.x===B.x&&A.w===B.w&&A.y+A.h===B.y){A.h+=B.h;this.free.splice(b,1);b--;}}
+      return{x,y,width:pw,height:ph,rot};
+    }
+  };
+}
+function maxRectsPack(items,W,H,kerf){
+  const k=Math.max(0,kerf||0);const bins=[];let queue=[...items];
+  while(queue.length>0){
+    queue.sort((a,b)=>b.w*b.h-a.w*a.h);
+    const packer=mkPacker(W,H),bin={width:W,height:H,rects:[],usedArea:0},remaining=[];let cnt=0;
+    for(const it of queue){
+      const pl=packer.place(it.w+k,it.h+k,it.allowRotation);
+      if(pl){bin.rects.push({x:pl.x,y:pl.y,width:pl.width,height:pl.height,meta:{id:it.id,name:it.name,originalW:it.origW,originalH:it.origH,rotated:pl.rot}});bin.usedArea+=it.origW*it.origH;cnt++;}
+      else remaining.push(it);
+    }
+    if(cnt>0){bins.push(bin);queue=remaining;}
+    else{const it=queue.shift();const nb={width:W,height:H,rects:[],usedArea:0};nb.rects.push({x:0,y:0,width:Math.min(it.w+k,W),height:Math.min(it.h+k,H),meta:{id:it.id,name:it.name,originalW:it.origW,originalH:it.origH,rotated:false}});nb.usedArea+=it.origW*it.origH;bins.push(nb);}
+  }
+  return bins;
+}
+
+function buildItems(){
+  const arr=[];
+  for(const p of S.pieces)for(let i=0;i<p.qty;i++){const w=+p.w||0,h=p.isSquare?w:+p.h||0;arr.push({id:p.id,name:p.name||'Pièce',w,h,origW:w,origH:h,allowRotation:p.isSquare?false:!!p.allowRotation});}
+  return arr;
+}
+function validate(){
+  const W=S.orientation==='landscape'?S.paper.h:S.paper.w;
+  const H=S.orientation==='landscape'?S.paper.w:S.paper.h;
+  const errs=[];
+  Array.from(piecesContainer.children).filter(n=>!isRowEmpty(n)).forEach((n,i)=>{
+    const sq=n.querySelector('.sq').checked,pw=n.querySelector('.pw'),ph=n.querySelector('.ph');
+    pw.classList.remove('invalid');ph.classList.remove('invalid');
+    if(!pw.value||+pw.value<=0){errs.push(`Pièce #${i+1} : Longueur requise (> 0)`);pw.classList.add('invalid');return;}
+    if(!sq&&(!ph.value||+ph.value<=0)){errs.push(`Pièce #${i+1} : Largeur requise (> 0)`);ph.classList.add('invalid');return;}
+    // Vérification dépassement format
+    const w=+pw.value,h=sq?w:+ph.value;
+    const fitsNormal = w<=W && h<=H;
+    const fitsRotated = w<=H && h<=W;
+    const canRot = !sq && n.querySelector('.pr').checked;
+    if(!fitsNormal && !(canRot && fitsRotated)){
+      const name=n.querySelector('.pname').value.trim()||`#${i+1}`;
+      errs.push(`Pièce « ${name} » (${w}×${h} mm) dépasse le format ${S.paper.name} (${W}×${H} mm)`);
+      pw.classList.add('invalid');ph.classList.add('invalid');
+    }
+  });
+  return errs;
+}
+
+// ── Calcul ────────────────────────────────────────────────────────────────────
+function compute(){
+  save();
+  const errs=validate();
+  if(errs.length){qs('#validationMsg').innerHTML=errs.map(e=>esc(e)).join('<br>');qs('#validationModal').classList.add('active');qs('#validationOk').focus();document.querySelector('.invalid')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
+  const items=buildItems();if(!items.length){alert('Aucune pièce à placer.');return;}
+  assignColors(S.pieces);
+  const W=S.orientation==='landscape'?S.paper.h:S.paper.w;
+  const H=S.orientation==='landscape'?S.paper.w:S.paper.h;
+  const k=S.kerf||0;
+  S.results=[
+    {label:'Solution 1',bins:shelfPack(items,W,H,k)},
+    {label:'Solution 2',bins:maxRectsPack(items,W,H,k)}
+  ];
+  S.curSol=0;
+  render();
+  if(isMobile())switchTab('results');
+}
+
+// ── Rendu SVG ─────────────────────────────────────────────────────────────────
+function renderBin(svgEl,b){
+  while(svgEl.firstChild)svgEl.removeChild(svgEl.firstChild);
+  const ns='http://www.w3.org/2000/svg',k=S.kerf||0;
+  const bg=document.createElementNS(ns,'rect');bg.setAttribute('x',0);bg.setAttribute('y',0);bg.setAttribute('width',b.width);bg.setAttribute('height',b.height);bg.setAttribute('fill','#fff');bg.setAttribute('stroke','#94a3b8');bg.setAttribute('stroke-width',.6);svgEl.appendChild(bg);
+  for(const r of b.rects){
+    const m=r.meta||{},color=pieceColor(m.id||m.name||'?');
+    const kh=k/2,iw=m.rotated?m.originalH:m.originalW,ih=m.rotated?m.originalW:m.originalH,ix=r.x+kh,iy=r.y+kh;
+    if(k>0.1){const oz=document.createElementNS(ns,'rect');oz.setAttribute('x',r.x);oz.setAttribute('y',r.y);oz.setAttribute('width',r.width);oz.setAttribute('height',r.height);oz.setAttribute('fill',lighten(color,.93));oz.setAttribute('stroke',lighten(color,.6));oz.setAttribute('stroke-width',.3);oz.setAttribute('stroke-dasharray','1.5 1');svgEl.appendChild(oz);}
+    const rc=document.createElementNS(ns,'rect');rc.setAttribute('x',ix);rc.setAttribute('y',iy);rc.setAttribute('width',iw);rc.setAttribute('height',ih);rc.setAttribute('fill',lighten(color,.72));rc.setAttribute('stroke',color);rc.setAttribute('stroke-width',.5);svgEl.appendChild(rc);
+    const fs=Math.min(5,Math.max(2.5,Math.min(iw,ih)*.14));
+    const txt=document.createElementNS(ns,'text');txt.setAttribute('x',ix+1.5);txt.setAttribute('y',iy+fs+1);txt.setAttribute('font-size',fs);txt.setAttribute('fill','#1e3a5f');txt.textContent=(m.name?m.name+' ':'')+m.originalW+'×'+m.originalH+(m.rotated?' ↺':'');svgEl.appendChild(txt);
+  }
+  svgEl.setAttribute('viewBox',`0 0 ${b.width} ${b.height}`);
+}
+
+// ── Rendu résultats ───────────────────────────────────────────────────────────
+function render(){
+  resultsArea.innerHTML='';
+  if(!S.results?.length){
+    resultsArea.innerHTML='<div class="help-block" style="margin-top:8px;">Aucun calcul. Configurez vos pièces et appuyez sur « ▶ Calculer ».</div>';
+    return;
+  }
+  const total=S.results.length;
+  const idx=Math.max(0,Math.min(S.curSol,total-1));
+  const sol=S.results[idx];
+
+  // Légende
+  if(S.pieces?.length){
+    const lhtml=S.pieces.map(p=>{const c=pieceColor(p.id);const sz=p.isSquare?`${p.w}×${p.w}`:`${p.w}×${p.h}`;return`<div class="legend-item"><div class="legend-swatch" style="background:${c}"></div>${esc(p.name||'Pièce')}<span style="color:var(--muted);margin-left:3px;">${sz} mm${p.qty>1?` ×${p.qty}`:''}</span></div>`;}).join('');
+    resultsArea.innerHTML=`<div class="section-title" style="margin-top:0">Légende</div><div class="legend">${lhtml}</div>`;
+  }
+
+  function mkNav(idxN){
+    const n=document.createElement('div');n.className='sol-nav';
+    const pb=document.createElement('button');pb.className='btn ghost';pb.textContent='←';pb.style.cssText='min-height:38px;padding:6px 14px;';pb.disabled=idxN===0;
+    const tl=document.createElement('strong');tl.style.fontSize='15px';tl.textContent=sol.label;
+    const cs=document.createElement('span');cs.className='sol-count';cs.textContent=`: ${sol.bins.length} feuille${sol.bins.length>1?'s':''}`;
+    const nb2=document.createElement('button');nb2.className='btn ghost';nb2.textContent='→';nb2.style.cssText='min-height:38px;padding:6px 14px;margin-left:auto;';nb2.disabled=idxN===total-1;
+    n.append(pb,tl,cs,nb2);
+    pb.addEventListener('click',()=>{S.curSol=Math.max(0,idxN-1);render();resultsArea.scrollIntoView({behavior:'smooth',block:'start'});});
+    nb2.addEventListener('click',()=>{S.curSol=Math.min(total-1,idxN+1);render();resultsArea.scrollIntoView({behavior:'smooth',block:'start'});});
+    return n;
+  }
+
+  resultsArea.appendChild(mkNav(idx));
+
+  // Feuilles empilées
+  sol.bins.forEach((b,i)=>{
+    const block=document.createElement('div');block.className='sheet-block';
+    const hdr=document.createElement('div');hdr.className='sheet-header';
+    hdr.innerHTML=`<span>Feuille ${i+1}</span>`;
+    const expBtn=document.createElement('button');expBtn.className='btn ghost';expBtn.textContent='⤓ SVG';expBtn.style.cssText='min-height:32px;padding:4px 10px;font-size:13px;';
+    hdr.appendChild(expBtn);block.appendChild(hdr);
+    const ns='http://www.w3.org/2000/svg';
+    const svgEl=document.createElementNS(ns,'svg');
+    svgEl.setAttribute('preserveAspectRatio','xMidYMid meet');
+    svgEl.setAttribute('class','sheet-svg');
+    const ratio=b.height/b.width;
+    svgEl.style.maxHeight=Math.round(Math.min(window.innerWidth*.9,600)*ratio)+'px';
+    block.appendChild(svgEl);
+    renderBin(svgEl,b);
+    resultsArea.appendChild(block);
+    expBtn.addEventListener('click',()=>{
+      const ns2='http://www.w3.org/2000/svg',k2=S.kerf||0;
+      const out=document.createElementNS(ns2,'svg');out.setAttribute('xmlns',ns2);out.setAttribute('width',b.width+'mm');out.setAttribute('height',b.height+'mm');out.setAttribute('viewBox',`0 0 ${b.width} ${b.height}`);
+      const bg=document.createElementNS(ns2,'rect');bg.setAttribute('x',0);bg.setAttribute('y',0);bg.setAttribute('width',b.width);bg.setAttribute('height',b.height);bg.setAttribute('fill','#fff');out.appendChild(bg);
+      b.rects.forEach(r=>{const m=r.meta||{},color=pieceColor(m.id||m.name||'?'),kh=k2/2,iw=m.rotated?m.originalH:m.originalW,ih=m.rotated?m.originalW:m.originalH;const rc=document.createElementNS(ns2,'rect');rc.setAttribute('x',r.x+kh);rc.setAttribute('y',r.y+kh);rc.setAttribute('width',iw);rc.setAttribute('height',ih);rc.setAttribute('fill',lighten(color,.72));rc.setAttribute('stroke',color);rc.setAttribute('stroke-width',.5);out.appendChild(rc);const t=document.createElementNS(ns2,'text');t.setAttribute('x',r.x+kh+1.5);t.setAttribute('y',r.y+kh+5);t.setAttribute('font-size',4);t.setAttribute('fill','#1e3a5f');t.textContent=(m.name?m.name+' ':'')+m.originalW+'×'+m.originalH+(m.rotated?' ↺':'');out.appendChild(t);});
+      dl(`decoupe_sol${idx+1}_f${i+1}.svg`,'<?xml version="1.0" encoding="UTF-8"?>\n'+new XMLSerializer().serializeToString(out));
+    });
+  });
+
+  resultsArea.appendChild(mkNav(idx));
+}
+
+// ── Confirmations ─────────────────────────────────────────────────────────────
+qs('#confirmCancel').addEventListener('click',()=>{pendingDel=null;qs('#confirmModal').classList.remove('active');});
+qs('#confirmModal').addEventListener('click',e=>{if(e.target===qs('#confirmModal')){pendingDel=null;qs('#confirmModal').classList.remove('active');}});
+qs('#confirmYes').addEventListener('click',()=>{
+  pendingDel?.remove();pendingDel=null;
+  ensureEmptyRow();save();
+  qs('#confirmModal').classList.remove('active');
+});
+qs('#clearCancel').addEventListener('click',()=>qs('#confirmClearModal').classList.remove('active'));
+qs('#confirmClearModal').addEventListener('click',e=>{if(e.target===qs('#confirmClearModal'))qs('#confirmClearModal').classList.remove('active');});
+qs('#clearYes').addEventListener('click',()=>{
+  piecesContainer.innerHTML='';
+  ensureEmptyRow();save();
+  qs('#confirmClearModal').classList.remove('active');
+});
+qs('#validationOk').addEventListener('click',()=>qs('#validationModal').classList.remove('active'));
+
+// ── Câblage ───────────────────────────────────────────────────────────────────
+qs('#clearFormsBtn').addEventListener('click',()=>{qs('#confirmClearModal').classList.add('active');qs('#clearCancel').focus();});
+qs('#calcBtn').addEventListener('click',compute);
+qs('#clearLayoutBtn').addEventListener('click',()=>{S.results=[];S.curSol=0;render();if(isMobile())switchTab('config');});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+paperSel.dispatchEvent(new Event('change'));
+loadRows();
+render();
+if(isMobile())switchTab('config');
+</script>
+</body>
+</html>
